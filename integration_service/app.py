@@ -4,7 +4,6 @@ import asyncio
 import logging
 import os
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
 
 from dotenv import load_dotenv
 

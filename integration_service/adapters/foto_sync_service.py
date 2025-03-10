@@ -97,14 +97,21 @@ class FotoSyncService:
             except Exception:
                 error_text = f"{service_name} - Error handling files {group}"
                 i_error_count += 1
+                await StatusAdapter().create_status(
+                    token,
+                    event,
+                    status_type,
+                    error_text,
+                )
                 logging.exception(error_text)
         informasjon = f"Pushed {i_photo_count} photos to pubsub, errors: {i_error_count}"
-        await StatusAdapter().create_status(
-            token,
-            event,
-            status_type,
-            informasjon,
-        )
+        if (i_error_count > 0) or (i_photo_count > 0):
+            await StatusAdapter().create_status(
+                token,
+                event,
+                status_type,
+                informasjon,
+            )
         return informasjon
 
 
