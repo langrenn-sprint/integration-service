@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 from integration_service.adapters import (
     ConfigAdapter,
     EventsAdapter,
-    FotoSyncService,
     StatusAdapter,
+    SyncService,
     UserAdapter,
 )
 
@@ -61,9 +61,9 @@ async def main() -> None:
                     # run service
                     await ConfigAdapter().update_config(token, event, "INTEGRATION_SERVICE_RUNNING", "True")
                     if service_config["service_mode"] in ["PUSH", "push", "Push"]:
-                        await FotoSyncService().push_new_photos_from_file(token, event)
+                        await SyncService().push_new_photos_from_file(token, event)
                     elif service_config["service_mode"] in ["PULL", "pull", "Pull"]:
-                        pass
+                        await SyncService().pull_photos_from_pubsub(token, event)
                     else:
                         raise_invalid_service_mode(service_config["service_mode"])
                     await ConfigAdapter().update_config(token, event, "INTEGRATION_SERVICE_RUNNING", "False")
