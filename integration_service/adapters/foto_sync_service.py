@@ -30,7 +30,6 @@ class FotoSyncService:
         # loop photos and group crops with main photo - only upload complete pairs
         new_photos = PhotosFileAdapter().get_all_photos()
         new_photos_grouped = group_photos(new_photos)
-        logging.info(f"Starting to push {len(new_photos_grouped)} photos")
         for x in new_photos_grouped:
             group = {}
             try:

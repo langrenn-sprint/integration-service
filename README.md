@@ -1,8 +1,13 @@
-# integration-service
+### integration-service
 Service for pushing and pulling messages and file to cloud services such as PubSub and Drive
-Start service:
+
+### Start service:
+```Zsh
 python3 -m integration_service.app
-But first, start dependencies (services & db):
+
+### But first, start dependencies (services & db):
+
+```Zsh
 docker-compose up event-service user-service photo-service mongodb
 
 ## Requirement for development
@@ -10,26 +15,27 @@ docker-compose up event-service user-service photo-service mongodb
 Install [uv](https://docs.astral.sh/uv/), e.g.:
 
 ```Zsh
-% curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 Then install the dependencies:
 
 ```Zsh
-% uv sync
+uv sync
 ```
 ### If required - virtual environment
 
-Install: curl <https://pyenv.run> | bash
-Create: python -m venv .vienv (replace .venv with your preferred name)
-Install python 3.12: pyenv install 3.12
-Activate:
+```Zsh
+curl <https://pyenv.run> | bash
+python -m venv .vienv
+pyenv install 3.12
 source .vienv/bin/activate
 
 ### Install
 
-% git clone <https://github.com/heming-langrenn/vision-ai-service.git>
-% cd vision-ai-service
+```Zsh
+git clone <https://github.com/heming-langrenn/vision-ai-service.git>
+cd vision-ai-service
 
 ### Prepare .env filer (dummy parameter values supplied)
 
