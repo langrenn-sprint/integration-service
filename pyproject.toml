@@ -63,6 +63,8 @@ ignore = [
     "E501",
     "EM102",
     "F401",
+    "FBT001",
+    "FBT002",
     "G004",
     "ISC001",
     "PLR0913",
@@ -81,9 +83,16 @@ ignore = [
 # so it knows to group first-party stuff last
 known-first-party = ["user_service"]
 
+[tool.ruff.lint.pylint]
+max-branches = 15
+
+[tool.ruff.lint.mccabe]
+# Flag errors (`C901`) whenever the complexity level exceeds
+max-complexity = 15
+
 [tool.pyright]
 venvPath = "." # rye installs the venv in the current dir
-venv = ".vienv" #       in a folder called `.vienv`
+venv = ".venv" #       in a folder called `.venv`
 #strict = ["**/*.py"] # use 'strict' checking on all files
 
 [tool.pytest.ini_options]

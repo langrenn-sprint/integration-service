@@ -8,7 +8,6 @@ from .events_adapter import EventsAdapter
 from .exceptions import VideoStreamNotFoundError
 from .google_cloud_storage_adapter import GoogleCloudStorageAdapter
 from .google_pub_sub_adapter import GooglePubSubAdapter
-from .photo_timing_service import PhotoTimingService
 from .photos_adapter import PhotosAdapter
 from .photos_file_adapter import PhotosFileAdapter
 from .raceclasses_adapter import RaceclassesAdapter

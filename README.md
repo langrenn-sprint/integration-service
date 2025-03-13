@@ -27,9 +27,9 @@ uv sync
 
 ```Zsh
 curl <https://pyenv.run> | bash
-python -m venv .vienv
+python -m venv .venv
 pyenv install 3.12
-source .vienv/bin/activate
+source .venv/bin/activate
 
 ### Install
 

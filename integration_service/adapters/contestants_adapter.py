@@ -4,7 +4,8 @@ import copy
 import logging
 import os
 import urllib.parse
-from typing import List
+from http import HTTPStatus
+from typing import Any
 
 from aiohttp import ClientSession, hdrs, web
 from multidict import MultiDict
@@ -26,22 +27,21 @@ class ContestantsAdapter:
         headers = MultiDict([(hdrs.AUTHORIZATION, f"Bearer {token}")])
 
         url = f"{EVENT_SERVICE_URL}/events/{event_id}/contestants/assign-bibs"
-        async with ClientSession() as session:
-            async with session.post(url, headers=headers) as resp:
-                res = resp.status
-                logging.debug(f"assign_bibs result - got response {resp}")
-                if res == 201:
-                    pass
-                elif resp.status == 401:
-                    raise web.HTTPBadRequest(reason=f"401 Unathorized - {servicename}")
-                else:
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
-            information = "Startnummer tildelt."
-        return information
+        async with ClientSession() as session, session.post(url, headers=headers) as resp:
+            res = resp.status
+            logging.debug(f"assign_bibs result - got response {resp}")
+            if res == HTTPStatus.CREATED:
+                pass
+            elif resp.status == HTTPStatus.UNAUTHORIZED:
+                err_msg = f"401 Unathorized - {servicename}"
+                raise web.HTTPBadRequest(reason=err_msg)
+            else:
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
+        return "Startnummer tildelt."
 
     async def create_contestant(
         self, token: str, event_id: str, request_body: dict
@@ -54,23 +54,23 @@ class ContestantsAdapter:
                 (hdrs.AUTHORIZATION, f"Bearer {token}"),
             ]
         )
-        async with ClientSession() as session:
-            async with session.post(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants",
-                headers=headers,
-                json=request_body,
-            ) as resp:
-                if resp.status == 201:
-                    logging.debug(f"result - got response {resp}")
-                elif resp.status == 401:
-                    raise web.HTTPBadRequest(reason=f"401 Unathorized - {servicename}")
-                else:
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    return body["detail"]
+        async with ClientSession() as session, session.post(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants",
+            headers=headers,
+            json=request_body,
+        ) as resp:
+            if resp.status == HTTPStatus.CREATED:
+                logging.debug(f"result - got response {resp}")
+            elif resp.status == HTTPStatus.UNAUTHORIZED:
+                err_msg = f"401 Unathorized - {servicename}"
+                raise web.HTTPBadRequest(reason=err_msg)
+            else:
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                return body["detail"]
         return "201"
 
-    async def create_contestants(self, token: str, event_id: str, inputfile) -> str:
+    async def create_contestants(self, token: str, event_id: str, inputfile: Any) -> str:
         """Create new contestants function."""
         servicename = "create_contestants"
         headers = {
@@ -78,24 +78,24 @@ class ContestantsAdapter:
             hdrs.AUTHORIZATION: f"Bearer {token}",
         }
         logging.debug(f"Create contestants - got file {inputfile}")
-        async with ClientSession() as session:
-            async with session.post(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants",
-                headers=headers,
-                data=inputfile,
-            ) as resp:
-                res = resp.status
-                logging.info(f"result - got response {res} - {resp}")
-                if res == 200:
-                    body = await resp.json()
-                elif resp.status == 401:
-                    raise web.HTTPBadRequest(reason=f"401 Unathorized - {servicename}")
-                else:
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
+        async with ClientSession() as session, session.post(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants",
+            headers=headers,
+            data=inputfile,
+        ) as resp:
+            res = resp.status
+            logging.info(f"result - got response {res} - {resp}")
+            if res == HTTPStatus.OK:
+                body = await resp.json()
+            elif resp.status == HTTPStatus.UNAUTHORIZED:
+                err_msg = f"401 Unathorized - {servicename}"
+                raise web.HTTPBadRequest(reason=err_msg)
+            else:
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
         # trying to parse result - skip if it fails
         informasjon = ""
         try:
@@ -120,23 +120,23 @@ class ContestantsAdapter:
             hdrs.AUTHORIZATION: f"Bearer {token}",
         }
 
-        async with ClientSession() as session:
-            async with session.delete(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants",
-                headers=headers,
-            ) as resp:
-                res = resp.status
-                logging.debug(f"delete all result - got response {resp}")
-                if res == 204:
-                    pass
-                elif resp.status == 401:
-                    raise web.HTTPBadRequest(reason=f"401 Unathorized - {servicename}")
-                else:
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
+        async with ClientSession() as session, session.delete(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants",
+            headers=headers,
+        ) as resp:
+            res = resp.status
+            logging.debug(f"delete all result - got response {resp}")
+            if res == HTTPStatus.NO_CONTENT:
+                pass
+            elif resp.status == HTTPStatus.UNAUTHORIZED:
+                err_msg = f"401 Unathorized - {servicename}"
+                raise web.HTTPBadRequest(reason=err_msg)
+            else:
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
         return str(res)
 
     async def delete_contestant(
@@ -160,23 +160,23 @@ class ContestantsAdapter:
         headers = {
             hdrs.AUTHORIZATION: f"Bearer {token}",
         }
-        async with ClientSession() as session:
-            async with session.delete(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants/{contestant['id']}",
-                headers=headers,
-            ) as resp:
-                res = resp.status
-                logging.debug(f"delete result - got response {resp}")
-                if res == 204:
-                    pass
-                elif resp.status == 401:
-                    raise web.HTTPBadRequest(reason=f"401 Unathorized - {servicename}")
-                else:
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
+        async with ClientSession() as session, session.delete(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants/{contestant['id']}",
+            headers=headers,
+        ) as resp:
+            res = resp.status
+            logging.debug(f"delete result - got response {resp}")
+            if res == HTTPStatus.NO_CONTENT:
+                pass
+            elif resp.status == HTTPStatus.UNAUTHORIZED:
+                err_msg = f"401 Unathorized - {servicename}"
+                raise web.HTTPBadRequest(reason=err_msg)
+            else:
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
         # update number of contestants in raceclass
         try:
             klasse = await RaceclassesAdapter().get_raceclass_by_ageclass(
@@ -188,9 +188,9 @@ class ContestantsAdapter:
                 token, event_id, klasse["id"], klasse
             )
             logging.debug(f"No_of_contestants updated - {result}")
-        except Exception as e:
+        except Exception:
             logging.exception(
-                f"{servicename} failed on update no of contestants in raceclass {e} - {contestant['ageclass']}"
+                f"{servicename} failed on update no of contestants in raceclass - {contestant['ageclass']}"
             )
         return str(res)
 
@@ -203,20 +203,19 @@ class ContestantsAdapter:
             ]
         )
         contestants = []
-        async with ClientSession() as session:
-            async with session.get(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants", headers=headers
-            ) as resp:
-                logging.debug(f"get_all_contestants - got response {resp.status}")
-                if resp.status == 200:
-                    contestants = await resp.json()
-                else:
-                    servicename = "get_all_contestants"
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
+        async with ClientSession() as session, session.get(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants", headers=headers
+        ) as resp:
+            logging.debug(f"get_all_contestants - got response {resp.status}")
+            if resp.status == HTTPStatus.OK:
+                contestants = await resp.json()
+            else:
+                servicename = "get_all_contestants"
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
         return contestants
 
     async def get_all_contestants_by_ageclass(
@@ -232,21 +231,20 @@ class ContestantsAdapter:
         contestants = []
         ageclass_name_url = urllib.parse.quote(ageclass_name, safe="")
         query_param = f"ageclass={ageclass_name_url}"
-        async with ClientSession() as session:
-            async with session.get(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants?{query_param}",
-                headers=headers,
-            ) as resp:
-                logging.debug(f"get_all_contestants - got response {resp.status}")
-                if resp.status == 200:
-                    contestants = await resp.json()
-                else:
-                    servicename = "get_all_contestants_by_ageclass"
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
+        async with ClientSession() as session, session.get(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants?{query_param}",
+            headers=headers,
+        ) as resp:
+            logging.debug(f"get_all_contestants - got response {resp.status}")
+            if resp.status == HTTPStatus.OK:
+                contestants = await resp.json()
+            else:
+                servicename = "get_all_contestants_by_ageclass"
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
         return contestants
 
     async def get_all_contestants_by_raceclass(
@@ -261,25 +259,24 @@ class ContestantsAdapter:
         )
         contestants = []
         raceclass_name_url = urllib.parse.quote(raceclass_name, safe="")
-        async with ClientSession() as session:
-            async with session.get(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants?raceclass={raceclass_name_url}",
-                headers=headers,
-            ) as resp:
-                logging.debug(
-                    f"get_all_contestants_by_raceclass ({raceclass_name}) - got response {resp.status}"
+        async with ClientSession() as session, session.get(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants?raceclass={raceclass_name_url}",
+            headers=headers,
+        ) as resp:
+            logging.debug(
+                f"get_all_contestants_by_raceclass ({raceclass_name}) - got response {resp.status}"
+            )
+            if resp.status == HTTPStatus.OK:
+                contestants = await resp.json()
+            else:
+                servicename = "get_all_contestants_by_raceclass"
+                body = await resp.json()
+                logging.error(
+                    f"{servicename} ({raceclass_name}) failed - {resp.status} - {body}"
                 )
-                if resp.status == 200:
-                    contestants = await resp.json()
-                else:
-                    servicename = "get_all_contestants_by_raceclass"
-                    body = await resp.json()
-                    logging.error(
-                        f"{servicename} ({raceclass_name}) failed - {resp.status} - {body}"
-                    )
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
         return contestants
 
     async def get_contestant_by_bib(self, token: str, event_id: str, bib: int) -> dict:
@@ -291,25 +288,24 @@ class ContestantsAdapter:
             ]
         )
         contestant = []
-        async with ClientSession() as session:
-            async with session.get(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants?bib={bib}",
-                headers=headers,
-            ) as resp:
-                logging.debug(
-                    f"get_contestants_by_raceclass - got response {resp.status}"
+        async with ClientSession() as session, session.get(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants?bib={bib}",
+            headers=headers,
+        ) as resp:
+            logging.debug(
+                f"get_contestants_by_raceclass - got response {resp.status}"
+            )
+            if resp.status == HTTPStatus.OK:
+                contestant = await resp.json()
+            else:
+                servicename = "get_contestants_by_bib"
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
                 )
-                if resp.status == 200:
-                    contestant = await resp.json()
-                else:
-                    servicename = "get_contestants_by_bib"
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
-            if len(contestant) == 0:
-                return {}
+        if len(contestant) == 0:
+            return {}
         return contestant[0]
 
     async def get_contestants_by_raceclass(
@@ -324,23 +320,22 @@ class ContestantsAdapter:
         )
         contestants = []
         raceclass_url = urllib.parse.quote(raceclass, safe="")
-        async with ClientSession() as session:
-            async with session.get(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants?raceclass={raceclass_url}",
-                headers=headers,
-            ) as resp:
-                logging.debug(
-                    f"get_contestants_by_raceclass - got response {resp.status}"
+        async with ClientSession() as session, session.get(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants?raceclass={raceclass_url}",
+            headers=headers,
+        ) as resp:
+            logging.debug(
+                f"get_contestants_by_raceclass - got response {resp.status}"
+            )
+            if resp.status == HTTPStatus.OK:
+                contestants = await resp.json()
+            else:
+                servicename = "get_contestants_by_raceclass"
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
                 )
-                if resp.status == 200:
-                    contestants = await resp.json()
-                else:
-                    servicename = "get_contestants_by_raceclass"
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
         return contestants
 
     async def get_contestant(
@@ -354,21 +349,20 @@ class ContestantsAdapter:
             ]
         )
         contestant = {}
-        async with ClientSession() as session:
-            async with session.get(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants/{contestant_id}",
-                headers=headers,
-            ) as resp:
-                logging.debug(f"get_contestant - got response {resp.status}")
-                if resp.status == 200:
-                    contestant = await resp.json()
-                else:
-                    servicename = "get_contestant"
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
+        async with ClientSession() as session, session.get(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants/{contestant_id}",
+            headers=headers,
+        ) as resp:
+            logging.debug(f"get_contestant - got response {resp.status}")
+            if resp.status == HTTPStatus.OK:
+                contestant = await resp.json()
+            else:
+                servicename = "get_contestant"
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
         return contestant
 
     async def search_contestants_by_name(
@@ -384,23 +378,23 @@ class ContestantsAdapter:
                 (hdrs.AUTHORIZATION, f"Bearer {token}"),
             ]
         )
-        async with ClientSession() as session:
-            async with session.post(
-                f"{EVENT_SERVICE_URL}/events/{event_id}/contestants/search",
-                headers=headers,
-                json=request_body,
-            ) as resp:
-                if resp.status == 200:
-                    contestants = await resp.json()
-                    logging.debug(f"result - got response {resp}")
-                elif resp.status == 401:
-                    raise web.HTTPBadRequest(reason=f"401 Unathorized - {servicename}")
-                else:
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"{resp.status} Error - {body['detail']}"
-                    )
+        async with ClientSession() as session, session.post(
+            f"{EVENT_SERVICE_URL}/events/{event_id}/contestants/search",
+            headers=headers,
+            json=request_body,
+        ) as resp:
+            if resp.status == HTTPStatus.OK:
+                contestants = await resp.json()
+                logging.debug(f"result - got response {resp}")
+            elif resp.status == HTTPStatus.UNAUTHORIZED:
+                err_msg = f"401 Unathorized - {servicename}"
+                raise web.HTTPBadRequest(reason=err_msg)
+            else:
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"{resp.status} Error - {body['detail']}"
+                )
         return contestants
 
     async def update_contestant(
@@ -431,18 +425,18 @@ class ContestantsAdapter:
             ]
         )
 
-        async with ClientSession() as session:
-            async with session.put(url, headers=headers, json=request_body) as resp:
-                res = resp.status
-                if res == 204:
-                    logging.debug(f"result - got response {resp}")
-                elif resp.status == 401:
-                    raise web.HTTPBadRequest(reason=f"401 Unathorized - {servicename}")
-                else:
-                    body = await resp.json()
-                    logging.error(f"{servicename} failed - {resp.status} - {body}")
-                    raise web.HTTPBadRequest(
-                        reason=f"Error - {resp.status}: {body['detail']}."
-                    )
+        async with ClientSession() as session, session.put(url, headers=headers, json=request_body) as resp:
+            res = resp.status
+            if res == HTTPStatus.NO_CONTENT:
+                logging.debug(f"result - got response {resp}")
+            elif resp.status == HTTPStatus.UNAUTHORIZED:
+                err_msg = f"401 Unathorized - {servicename}"
+                raise web.HTTPBadRequest(reason=err_msg)
+            else:
+                body = await resp.json()
+                logging.error(f"{servicename} failed - {resp.status} - {body}")
+                raise web.HTTPBadRequest(
+                    reason=f"Error - {resp.status}: {body['detail']}."
+                )
 
         return str(resp.status)

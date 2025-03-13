@@ -106,7 +106,8 @@ class StatusAdapter:
                     location = resp.headers[hdrs.LOCATION]
                     result = location.split(os.path.sep)[-1]
                 elif resp.status == HTTPStatus.UNAUTHORIZED:
-                    raise web.HTTPBadRequest(reason=f"401 Unathorized - {servicename}")
+                    err_msg = f"401 Unathorized - {servicename}"
+                    raise web.HTTPBadRequest(reason=err_msg)
                 else:
                     body = await resp.json()
                     logging.error(f"{servicename} failed - {resp.status} - {body}")

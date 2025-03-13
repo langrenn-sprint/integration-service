@@ -4,6 +4,7 @@ import datetime
 import json
 import logging
 import os
+from http import HTTPStatus
 from pathlib import Path
 
 import piexif
@@ -64,7 +65,7 @@ class SyncService:
                         photo = {}
                     if photo:
                         # update existing photo
-                        photo["name"] = os.path.basename(message["photo_url"])
+                        photo["name"] = Path(message["photo_url"]).name
                         photo["g_crop_url"] = ""
                         photo["g_base_url"] = message["photo_url"]
                         if message["photo_info"]["passeringspunkt"] in [
@@ -85,12 +86,12 @@ class SyncService:
                         # create new photo
                         photo_info = {
                             "confidence": 0,
-                            "name": os.path.basename(message["photo_url"]),
+                            "name": Path(message["photo_url"]).name,
                             "is_photo_finish": False,
                             "is_start_registration": False,
                             "starred": False,
                             "event_id": event["id"],
-                            "creation_time": format_time(creation_time, False),
+                            "creation_time": format_time(creation_time),
                             "ai_information": message["ai_information"],
                             "information": message["photo_info"],
                             "race_id": "",
@@ -272,7 +273,7 @@ async def find_race_info_by_bib(
                 )
                 if foundheat != "":
                     photo_info["race_id"] = foundheat
-                    result = 200  # OK, found a heat
+                    result = HTTPStatus.OK  # OK, found a heat
 
                     # Get klubb and klasse
                     if bib not in photo_info["biblist"]:
@@ -294,7 +295,7 @@ async def find_race_info_by_bib(
                                 )
                         except Exception as e:
                             logging.debug(f"Missing attribute - {e}")
-                            result = 206  # Partial content
+                            result = HTTPStatus.PARTIAL_CONTENT  # Partial content
     return result
 
 
@@ -327,7 +328,7 @@ async def find_race_info_by_time(
     if best_fit_race["seconds_diff"] < BIG_DIFF:
         photo_info["race_id"] = best_fit_race["race_id"]
         photo_info["raceclass"] = best_fit_race["raceclass"]
-        result = 200  # OK, found a heat
+        result = HTTPStatus.OK  # OK, found a heat
         photo_info["confidence"] = confidence  # identified by time - medium confidence!
         logging.info(f"Diff - best match race {best_fit_race}")
     return result
@@ -344,26 +345,19 @@ def find_raceclass(ageclass: str, raceclasses: list) -> str:
     return funnetklasse
 
 
-def format_time(timez: str, zulu: bool = False) -> str:
+def format_time(timez: str) -> str:
     """Convert to normalized time - string formats."""
     time = ""
-    t2 = None
-    time_zone_offset_g_photos = EventsAdapter().get_global_setting(
-        "TIME_ZONE_OFFSET_G_PHOTOS"
-    )
+    t1 = None
     date_patterns = EventsAdapter().get_global_setting("DATE_PATTERNS")
     date_pattern_list = date_patterns.split(";")
     for pattern in date_pattern_list:
         try:
             t1 = datetime.datetime.strptime(timez, pattern).replace(tzinfo=datetime.UTC)
-            # calculate new time
-            delta_seconds = int(time_zone_offset_g_photos) * 3600
-            t2 = t1 + datetime.timedelta(seconds=delta_seconds) if zulu else t1
-            break
         except ValueError:
             logging.debug(f"Got error parsing time {ValueError}")
-    if t2:
-        time = f"{t2.strftime('%Y')}-{t2.strftime('%m')}-{t2.strftime('%d')}T{t2.strftime('%X')}"
+    if t1:
+        time = f"{t1.strftime('%Y')}-{t1.strftime('%m')}-{t1.strftime('%d')}T{t1.strftime('%X')}"
     return time
 
 
