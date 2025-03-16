@@ -102,40 +102,6 @@ class EventsAdapter:
                 )
         return event
 
-    def get_global_setting(self, param_name: str) -> str:
-        """Get global settings from .env file."""
-        config_file = Path(f"{Path.cwd()}/integration_service/config/global_settings.json")
-        try:
-            with config_file.open() as json_file:
-                settings = json.load(json_file)
-                global_setting = settings[param_name]
-        except Exception as e:
-            logging.exception(
-                f"Global setting {param_name} not found. File path {config_file}"
-            )
-            raise Exception from e
-        return global_setting
-
-    def get_global_setting_int(self, param_name: str) -> int:
-        """Get global settings from .env file."""
-        string_value = self.get_global_setting(param_name)
-        try:
-            global_setting_int = int(string_value)
-        except Exception as e:
-            logging.exception(
-                f"Error getting global_setting_int {param_name}. Value {string_value}"
-            )
-            raise Exception from e
-        return global_setting_int
-
-    def get_global_setting_bool(self, param_name: str) -> bool:
-        """Get config boolean value."""
-        string_value = self.get_global_setting(param_name)
-        boolean_value = False
-        if string_value in ["True", "true", "1"]:
-            boolean_value = True
-        return boolean_value
-
     def get_local_datetime_now(self, event: dict) -> datetime.datetime:
         """Return local datetime object, time zone adjusted from event info."""
         time_zone = event["timezone"]

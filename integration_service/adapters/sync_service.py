@@ -91,7 +91,7 @@ class SyncService:
                             "is_start_registration": False,
                             "starred": False,
                             "event_id": event["id"],
-                            "creation_time": format_time(creation_time),
+                            "creation_time": await format_time(token, event, creation_time),
                             "ai_information": message["ai_information"],
                             "information": message["photo_info"],
                             "race_id": "",
@@ -151,19 +151,12 @@ class SyncService:
                 group = new_photos_grouped[x]
                 if group["main"] and group["crop"]:
                     # upload photo to cloud storage
-                    try:
-                        url_main = GoogleCloudStorageAdapter().upload_blob(
-                            group["main"]
-                        )
-                        url_crop = GoogleCloudStorageAdapter().upload_blob(
-                            group["crop"]
-                        )
-                    except Exception as e:
-                        error_text = (
-                            f"Error uploading to Google photos. Files {group} - {e}"
-                        )
-                        logging.exception(error_text)
-                        raise Exception(error_text) from e
+                    url_main = GoogleCloudStorageAdapter().upload_blob(
+                        group["main"]
+                    )
+                    url_crop = GoogleCloudStorageAdapter().upload_blob(
+                        group["crop"]
+                    )
 
                     # analyze photo with Vision AI
                     try:
@@ -208,8 +201,8 @@ class SyncService:
                     logging.debug(f"Published message {result} to pubsub.")
                     i_photo_count += 1
 
-            except Exception:
-                error_text = f"{service_name} - Error handling files {group}"
+            except Exception as e:
+                error_text = f"{service_name} - {e}"
                 i_error_count += 1
                 await StatusAdapter().create_status(
                     token,
@@ -315,7 +308,7 @@ async def find_race_info_by_time(
     }
     for race in all_races:
         seconds_diff = abs(
-            get_seconds_diff(photo_info["creation_time"], race["start_time"])
+            await get_seconds_diff(token, event, photo_info["creation_time"], race["start_time"])
             - raceduration
         )
 
@@ -345,11 +338,11 @@ def find_raceclass(ageclass: str, raceclasses: list) -> str:
     return funnetklasse
 
 
-def format_time(timez: str) -> str:
+async def format_time(token: str, event: dict, timez: str) -> str:
     """Convert to normalized time - string formats."""
     time = ""
     t1 = None
-    date_patterns = EventsAdapter().get_global_setting("DATE_PATTERNS")
+    date_patterns = await ConfigAdapter().get_config(token, event, "DATE_PATTERNS")
     date_pattern_list = date_patterns.split(";")
     for pattern in date_pattern_list:
         try:
@@ -402,12 +395,12 @@ def get_image_description(file_path: str) -> dict:
     return image_info
 
 
-def get_seconds_diff(time1: str, time2: str) -> int:
+async def get_seconds_diff(token: str, event: dict, time1: str, time2: str) -> int:
     """Compare time1 and time2, return time diff in min."""
     t1 = datetime.datetime.strptime("1", "%S").replace(tzinfo=datetime.UTC)  # Initialize time to zero
     t2 = datetime.datetime.strptime("1", "%S").replace(tzinfo=datetime.UTC)
 
-    date_patterns = EventsAdapter().get_global_setting("DATE_PATTERNS")
+    date_patterns = await ConfigAdapter().get_config(token, event, "DATE_PATTERNS")
     date_pattern_list = date_patterns.split(";")
     for pattern in date_pattern_list:
         try:
@@ -437,7 +430,7 @@ async def verify_heat_time(
             max_time_dev = await ConfigAdapter().get_config_int(
                 token, event, "RACE_TIME_DEVIATION_ALLOWED"
             )
-            seconds = get_seconds_diff(datetime_foto, race["start_time"])
+            seconds = await get_seconds_diff(token, event, datetime_foto, race["start_time"])
             if 0 < seconds < (max_time_dev + raceduration):
                 foundheat = race["id"]
                 race_name = (

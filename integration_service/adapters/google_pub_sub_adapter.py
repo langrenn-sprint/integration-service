@@ -7,11 +7,6 @@ import os
 from google.api_core import retry
 from google.cloud import pubsub_v1  # type: ignore[attr-defined]
 
-project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "")
-topic_id = os.getenv("GOOGLE_PUBSUB_TOPIC_ID", "")
-subscription_id = os.getenv("GOOGLE_PUBSUB_SUBSCRIPTION_ID", "")
-num_messages = os.getenv("GOOGLE_PUBSUB_NUM_MESSAGES", "10")
-
 
 class GooglePubSubAdapter:
     """Class representing google pub sub adapter."""
@@ -19,6 +14,15 @@ class GooglePubSubAdapter:
     async def publish_message(self, data_str: str) -> str:
         """Get all items for an album."""
         servicename = "GooglePubSubAdapter.publish_message"
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+        topic_id = os.getenv("GOOGLE_PUBSUB_TOPIC_ID", "")
+        if project_id == "":
+            err_msg = "GOOGLE_CLOUD_PROJECT not found in .env"
+            raise Exception(err_msg)
+        if topic_id == "":
+            err_msg = "GOOGLE_PUBSUB_TOPIC_ID not found in .env"
+            raise Exception(err_msg)
+
         try:
             publisher = pubsub_v1.PublisherClient()
             # The `topic_path` method creates a fully qualified identifier
@@ -38,6 +42,16 @@ class GooglePubSubAdapter:
     async def pull_messages(self) -> list:
         """Pull messages from topic. Return messages as list of dicts."""
         servicename = "GooglePubSubAdapter.pull_messages"
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+        subscription_id = os.getenv("GOOGLE_PUBSUB_SUBSCRIPTION_ID", "")
+        num_messages = int(os.getenv("GOOGLE_PUBSUB_NUM_MESSAGES", "10"))
+        if project_id == "":
+            err_msg = "GOOGLE_CLOUD_PROJECT not found in .env"
+            raise Exception(err_msg)
+        if subscription_id == "":
+            err_msg = "GOOGLE_PUBSUB_SUBSCRIPTION_ID not found in .env"
+            raise Exception(err_msg)
+
         try:
             message_body = []
             subscriber = pubsub_v1.SubscriberClient()

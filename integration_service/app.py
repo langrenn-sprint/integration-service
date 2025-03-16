@@ -87,9 +87,12 @@ async def main() -> None:
                 await ConfigAdapter().update_config(
                     token, event, "INTEGRATION_SERVICE_START", "False"
                 )
-            if i >= STATUS_INTERVAL:
-                informasjon = f"Integration Service er kjører - status: {service_config}."
+            if i > STATUS_INTERVAL:
+                informasjon = f"Integration Service kjører i modus {service_config['service_mode']}."
                 logging.info(informasjon)
+                await StatusAdapter().create_status(
+                    token, event, status_type, informasjon
+                )
                 i = 0
             else:
                 i += 1
