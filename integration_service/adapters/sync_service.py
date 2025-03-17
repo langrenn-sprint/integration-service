@@ -35,6 +35,9 @@ class SyncService:
     ) -> str:
         """Get events from pubsub and sync with local database."""
         informasjon = ""
+        status_type = await ConfigAdapter().get_config(
+            token, event, "INTEGRATION_SERVICE_STATUS_TYPE"
+        )
         i_c = 0
         i_u = 0
         i_other = 0
@@ -130,6 +133,7 @@ class SyncService:
             )
             if i_other > 0:
                 informasjon += f" Forkastet {i_other} meldinger som ikke tilhører dette arrangementet."
+            await StatusAdapter().create_status(token, event, status_type, informasjon)
         return informasjon
 
     async def push_new_photos_from_file(self, token: str, event: dict) -> str:
