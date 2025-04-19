@@ -79,3 +79,24 @@ docker login ghcr.io -u github
 password: Use a generated access token from GitHub (https://github.com/settings/tokens/1878556677)
 docker tag ghcr.io/langrenn-sprint/vision-ai-service:test ghcr.io/langrenn-sprint/vision-ai-service:latest
 docker push ghcr.io/langrenn-sprint/vision-ai-service:latest
+
+### Innstillinger i google cloud
+- Create OAuth2.0 client Id: <https://console.cloud.google.com/apis/credentials>
+- Hints1: Javascript origins: http://localhost:8080 and http://localhost
+- Hints2: Redirect URI: http://localhost:8080/photos_adm and http://localhost/photos_adm
+- Download client_secret.json and save it in secrets folder, remember to add it to .env file
+- Set up conset screen
+- PUBSUB: Create topic and subscription
+- Install python libraries: pip install --upgrade google-cloud-pubsub
+- Set upp application default credentials: https://cloud.google.com/docs/authentication/provide-credentials-adc#how-to
+- Cloud storage: Bucket - https://storage.googleapis.com/langrenn-photo/result2.jpg
+  - Hint: Set to publicly available and allUsers principals, role Viewer
+
+Denne fila _skal_ ligge i .dockerignore og .gitignore
+
+## Referanser
+Dokumentasjon: <https://langrenn-sprint.github.io/docs/>
+aiohttp: <https://docs.aiohttp.org/>
+Googel OAuth2: <https://developers.google.com/identity/protocols/oauth2>
+Google Photos API: <https://developers.google.com/photos/library/guides/get-started>
+

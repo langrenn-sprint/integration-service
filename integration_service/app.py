@@ -51,7 +51,7 @@ async def main() -> None:
 
         # service ready!
         await ConfigAdapter().update_config(
-            token, event, "INTEGRATION_SERVICE_AVAILABLE", "True"
+            token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "True"
         )
         while True:
             service_config = await get_service_status(token, event)
@@ -59,18 +59,18 @@ async def main() -> None:
                 # run simulation
                 if service_config["service_start"]:
                     # run service
-                    await ConfigAdapter().update_config(token, event, "INTEGRATION_SERVICE_RUNNING", "True")
+                    await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
                     if service_config["service_mode"] in ["PUSH", "push", "Push"]:
                         await SyncService().push_new_photos_from_file(token, event)
                     elif service_config["service_mode"] in ["PULL", "pull", "Pull"]:
                         await SyncService().pull_photos_from_pubsub(token, event)
                     else:
                         raise_invalid_service_mode(service_config["service_mode"])
-                    await ConfigAdapter().update_config(token, event, "INTEGRATION_SERVICE_RUNNING", "False")
+                    await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
                 else:
                     # should be invalid (no muliti thread) - reset
                     await ConfigAdapter().update_config(
-                        token, event, "INTEGRATION_SERVICE_RUNNING", "False"
+                        token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
                     )
             except Exception as e:
                 err_string = str(e)
@@ -82,10 +82,10 @@ async def main() -> None:
                     f"Error in Integration Service. Stopping.: {err_string}",
                 )
                 await ConfigAdapter().update_config(
-                    token, event, "INTEGRATION_SERVICE_RUNNING", "False"
+                    token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
                 )
                 await ConfigAdapter().update_config(
-                    token, event, "INTEGRATION_SERVICE_START", "False"
+                    token, event["id"], "INTEGRATION_SERVICE_START", "False"
                 )
             if i > STATUS_INTERVAL:
                 informasjon = f"Integration Service kjører i modus {service_config['service_mode']}."
@@ -104,7 +104,7 @@ async def main() -> None:
             token, event, status_type, f"Critical Error - exiting program: {err_string}"
         )
     await ConfigAdapter().update_config(
-        token, event, "INTEGRATION_SERVICE_AVAILABLE", "False"
+        token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "False"
     )
     logging.info("Goodbye!")
 
@@ -155,7 +155,7 @@ async def get_event(token: str) -> dict:
                     else:
                         event["id"] = events_db[0]["id"]
             status_type = await ConfigAdapter().get_config(
-                token, event, "INTEGRATION_SERVICE_STATUS_TYPE"
+                token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
             )
             if event:
                 event_found = True
@@ -178,16 +178,16 @@ async def get_event(token: str) -> dict:
 async def get_service_status(token: str, event: dict) -> dict:
     """Get config details - use info from db."""
     service_available = await ConfigAdapter().get_config_bool(
-        token, event, "INTEGRATION_SERVICE_AVAILABLE"
+        token, event["id"], "INTEGRATION_SERVICE_AVAILABLE"
     )
     service_running = await ConfigAdapter().get_config_bool(
-        token, event, "INTEGRATION_SERVICE_RUNNING"
+        token, event["id"], "INTEGRATION_SERVICE_RUNNING"
     )
     service_start = await ConfigAdapter().get_config_bool(
-        token, event, "INTEGRATION_SERVICE_START"
+        token, event["id"], "INTEGRATION_SERVICE_START"
     )
     service_mode = await ConfigAdapter().get_config(
-        token, event, "INTEGRATION_SERVICE_MODE"
+        token, event["id"], "INTEGRATION_SERVICE_MODE"
     )
     return {
         "service_available": service_available,

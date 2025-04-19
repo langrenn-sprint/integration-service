@@ -36,7 +36,7 @@ class SyncService:
         """Get events from pubsub and sync with local database."""
         informasjon = ""
         status_type = await ConfigAdapter().get_config(
-            token, event, "INTEGRATION_SERVICE_STATUS_TYPE"
+            token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
         )
         i_c = 0
         i_u = 0
@@ -124,6 +124,9 @@ class SyncService:
                         photo_id = await PhotosAdapter().create_photo(
                             token, photo_info
                         )
+                        await ConfigAdapter().update_config(
+                            token, event["id"], "GOOGLE_LATEST_PHOTO", message["photo_url"]
+                        )
                         logging.debug(f"Created photo with id {photo_id}")
                         i_c += 1
                 else:
@@ -143,7 +146,7 @@ class SyncService:
         informasjon = ""
         service_name = "push_new_photos_from_file"
         status_type = await ConfigAdapter().get_config(
-            token, event, "INTEGRATION_SERVICE_STATUS_TYPE"
+            token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
         )
 
         # loop photos and group crops with main photo - only upload complete pairs
@@ -164,7 +167,7 @@ class SyncService:
 
                     # analyze photo with Vision AI
                     try:
-                        conf_limit = await ConfigAdapter().get_config(token, event, "CONFIDENCE_LIMIT")
+                        conf_limit = await ConfigAdapter().get_config(token, event["id"], "CONFIDENCE_LIMIT")
                         ai_information = AiImageService().analyze_photo_g_langrenn_v2(
                             url_main, url_crop, conf_limit
                         )
@@ -254,7 +257,7 @@ async def find_race_info_by_bib(
     result = HTTPStatus.NO_CONTENT  # no content
     foundheat = ""
     raceduration = await ConfigAdapter().get_config_int(
-        token, event, "RACE_DURATION_ESTIMATE"
+        token, event["id"], "RACE_DURATION_ESTIMATE"
     )
     starter = await StartAdapter().get_start_entries_by_bib(token, event["id"], bib)
     if len(starter) > 0:
@@ -302,7 +305,7 @@ async def find_race_info_by_time(
     """Analyse photo time and identify race with best time-match."""
     result = HTTPStatus.NO_CONTENT  # no content
     raceduration = await ConfigAdapter().get_config_int(
-        token, event, "RACE_DURATION_ESTIMATE"
+        token, event["id"], "RACE_DURATION_ESTIMATE"
     )
     all_races = await RaceplansAdapter().get_all_races(token, event["id"])
     best_fit_race = {
@@ -346,7 +349,7 @@ async def format_time(token: str, event: dict, timez: str) -> str:
     """Convert to normalized time - string formats."""
     time = ""
     t1 = None
-    date_patterns = await ConfigAdapter().get_config(token, event, "DATE_PATTERNS")
+    date_patterns = await ConfigAdapter().get_config(token, event["id"], "DATE_PATTERNS")
     date_pattern_list = date_patterns.split(";")
     for pattern in date_pattern_list:
         try:
@@ -404,7 +407,7 @@ async def get_seconds_diff(token: str, event: dict, time1: str, time2: str) -> i
     t1 = datetime.datetime.strptime("1", "%S").replace(tzinfo=datetime.UTC)  # Initialize time to zero
     t2 = datetime.datetime.strptime("1", "%S").replace(tzinfo=datetime.UTC)
 
-    date_patterns = await ConfigAdapter().get_config(token, event, "DATE_PATTERNS")
+    date_patterns = await ConfigAdapter().get_config(token, event["id"], "DATE_PATTERNS")
     date_pattern_list = date_patterns.split(";")
     for pattern in date_pattern_list:
         try:
@@ -432,7 +435,7 @@ async def verify_heat_time(
         race = await RaceplansAdapter().get_race_by_id(token, race_id)
         if race is not None:
             max_time_dev = await ConfigAdapter().get_config_int(
-                token, event, "RACE_TIME_DEVIATION_ALLOWED"
+                token, event["id"], "RACE_TIME_DEVIATION_ALLOWED"
             )
             seconds = await get_seconds_diff(token, event, datetime_foto, race["start_time"])
             if 0 < seconds < (max_time_dev + raceduration):
