@@ -100,3 +100,9 @@ aiohttp: <https://docs.aiohttp.org/>
 Googel OAuth2: <https://developers.google.com/identity/protocols/oauth2>
 Google Photos API: <https://developers.google.com/photos/library/guides/get-started>
 
+
+## Docker clean up
+docker compose down
+docker network prune
+docker container prune
+docker rmi $(docker images -q)
