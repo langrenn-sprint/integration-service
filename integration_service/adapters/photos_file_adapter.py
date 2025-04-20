@@ -21,7 +21,7 @@ class PhotosFileAdapter:
             # loop files in directory
             for f in Path(PHOTOS_FILE_PATH).iterdir():
                 if f.suffix in [".jpg", ".png"] and "_config" not in f.name:
-                        photos.append(f"{PHOTOS_FILE_PATH}/{f}")
+                        photos.append(f"{PHOTOS_FILE_PATH}/{f.name}")
         except Exception:
             logging.exception("Error getting photos")
         return photos
