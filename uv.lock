@@ -589,6 +589,7 @@ dependencies = [
     { name = "pyjwt" },
     { name = "pytest" },
     { name = "python-dotenv" },
+    { name = "requests" },
 ]
 
 [package.dev-dependencies]
@@ -602,7 +603,6 @@ dev = [
     { name = "pytest-docker" },
     { name = "pytest-env" },
     { name = "pytest-mock" },
-    { name = "requests" },
     { name = "ruff" },
 ]
 
@@ -622,6 +622,7 @@ requires-dist = [
     { name = "pyjwt", specifier = ">=2.9.0" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
+    { name = "requests", specifier = ">=2.32.3" },
 ]
 
 [package.metadata.requires-dev]
@@ -635,7 +636,6 @@ dev = [
     { name = "pytest-docker", specifier = ">=3.1.1" },
     { name = "pytest-env", specifier = ">=1.1.5" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
-    { name = "requests", specifier = ">=2.32.3" },
     { name = "ruff", specifier = ">=0.7.1" },
 ]
 
