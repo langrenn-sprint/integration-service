@@ -22,5 +22,5 @@ LABEL org.opencontainers.image.description="integration-service"
 LABEL org.opencontainers.image.licenses=Apache-2.0
 
 # Run the application.
-CMD ["python", "-m", "integration_service.app"] 
+CMD ["/app/.venv/bin/python", "-m", "integration_service.app"] 
 # CMD python3 integration_service/app.py

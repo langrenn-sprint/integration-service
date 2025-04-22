@@ -1,9 +1,9 @@
 ### integration-service
 Service for pushing and pulling messages and file to cloud services such as PubSub and Drive
 
-### Start service:
+### Start service in virtual env:
 ```Zsh
-python3 -m integration_service.app
+.venv/vin/python3 -m integration_service.app
 
 ### But first, start dependencies (services & db):
 
