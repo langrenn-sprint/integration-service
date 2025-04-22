@@ -5,13 +5,19 @@ import os
 from http import HTTPStatus
 
 from aiohttp import ClientSession, hdrs
-from dotenv import load_dotenv
 from multidict import MultiDict
+from dotenv import load_dotenv
 
-# get base settings
+# Load environment variables from .env file
 load_dotenv()
+
+# Get environment variables with validation
 USERS_HOST_SERVER = os.getenv("USERS_HOST_SERVER")
 USERS_HOST_PORT = os.getenv("USERS_HOST_PORT")
+
+if not USERS_HOST_SERVER or not USERS_HOST_PORT:
+    raise EnvironmentError("USERS_HOST_SERVER or USERS_HOST_PORT is not set.")
+
 USER_SERVICE_URL = f"http://{USERS_HOST_SERVER}:{USERS_HOST_PORT}"
 
 
