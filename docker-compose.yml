@@ -8,6 +8,8 @@ services:
       - EVENTS_HOST_PORT=8080
       - PHOTOS_HOST_SERVER=photo-service
       - PHOTOS_HOST_PORT=8080
+      - RACE_HOST_SERVER=race-service
+      - RACE_HOST_PORT=8080
       - USERS_HOST_SERVER=user-service
       - USERS_HOST_PORT=8080
     volumes:
