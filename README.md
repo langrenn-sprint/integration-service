@@ -3,7 +3,7 @@ Service for pushing and pulling messages and file to cloud services such as PubS
 
 ### Start service in virtual env:
 ```Zsh
-.venv/vin/python3 -m integration_service.app
+.venv/bin/python3 -m integration_service.app
 
 ### But first, start dependencies (services & db):
 
@@ -28,7 +28,7 @@ uv sync
 ```Zsh
 curl <https://pyenv.run> | bash
 python -m venv .venv
-pyenv install 3.12
+pyenv install 3.13
 source .venv/bin/activate
 
 ### Install

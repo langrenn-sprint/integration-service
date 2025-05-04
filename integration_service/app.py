@@ -45,6 +45,15 @@ async def main() -> None:
         # login to data-source
         token = await do_login()
         event = await get_event(token)
+        information = (
+            f"integration-service is ready! - {event['name']}, {event['date_of_event']}"
+        )
+        status_type = await ConfigAdapter().get_config(
+            token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
+        )
+        await StatusAdapter().create_status(
+            token, event, status_type, information
+        )
 
         # service ready!
         await ConfigAdapter().update_config(
@@ -86,7 +95,6 @@ async def main() -> None:
                 )
             if i > STATUS_INTERVAL:
                 informasjon = f"Integration Service kjører i modus {service_config['service_mode']}."
-                logging.info(informasjon)
                 await StatusAdapter().create_status(
                     token, event, status_type, informasjon
                 )
@@ -131,9 +139,15 @@ async def do_login() -> str:
 
 async def get_event(token: str) -> dict:
     """Get event_details - use info from config and db."""
+    def raise_multiple_events_error(events_db: list) -> None:
+        """Raise an exception for multiple events found."""
+        information = (
+            f"Multiple events found. Please specify an EVENT_ID in .env: {events_db}"
+        )
+        raise Exception(information)
+
     event = {}
-    event_found = False
-    while not event_found:
+    while True:
         try:
             events_db = await EventsAdapter().get_all_events(token)
             event_id_config = os.getenv("EVENT_ID")
@@ -147,21 +161,8 @@ async def get_event(token: str) -> dict:
                         event = _event
                         break
                 else:
-                    if event_id_config:
-                        event["id"] = event_id_config
-                    else:
-                        event["id"] = events_db[0]["id"]
-            status_type = await ConfigAdapter().get_config(
-                token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
-            )
+                    raise_multiple_events_error(events_db)
             if event:
-                event_found = True
-                information = (
-                    f"integration-service is ready! - {event['name']}, {event['date']}"
-                )
-                await StatusAdapter().create_status(
-                    token, event, status_type, information
-                )
                 break
         except Exception as e:
             err_string = str(e)
