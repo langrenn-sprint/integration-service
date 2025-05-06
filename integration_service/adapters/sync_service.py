@@ -43,7 +43,7 @@ class SyncService:
         i_other = 0
         # get all messages from pubsub
 
-        pull_messages = await GooglePubSubAdapter().pull_messages()
+        pull_messages = GooglePubSubAdapter().pull_messages()
         if len(pull_messages) == 0:
             informasjon = "Ingen bilder funnet."
         else:
@@ -186,7 +186,7 @@ class SyncService:
 
                     # publish info to pubsub
                     try:
-                        result = await GooglePubSubAdapter().publish_message(
+                        result = GooglePubSubAdapter().publish_message(
                             json.dumps(pub_message)
                         )
                     except Exception as e:

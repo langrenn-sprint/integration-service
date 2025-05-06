@@ -153,9 +153,7 @@ async def get_event(token: str) -> dict:
             event_id_config = os.getenv("EVENT_ID")
             if len(events_db) == 1:
                 event = events_db[0]
-            elif len(events_db) == 0:
-                event["id"] = event_id_config
-            else:
+            elif len(events_db) > 1:
                 for _event in events_db:
                     if _event["id"] == event_id_config:
                         event = _event

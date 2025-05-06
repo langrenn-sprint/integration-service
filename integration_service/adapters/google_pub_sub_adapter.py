@@ -11,7 +11,7 @@ from google.cloud import pubsub_v1  # type: ignore[attr-defined]
 class GooglePubSubAdapter:
     """Class representing google pub sub adapter."""
 
-    async def publish_message(self, data_str: str) -> str:
+    def publish_message(self, data_str: str) -> str:
         """Get all items for an album."""
         servicename = "GooglePubSubAdapter.publish_message"
         project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "")
@@ -39,7 +39,7 @@ class GooglePubSubAdapter:
             raise Exception(error_text) from e
         return future.result()
 
-    async def pull_messages(self) -> list:
+    def pull_messages(self) -> list:
         """Pull messages from topic. Return messages as list of dicts."""
         servicename = "GooglePubSubAdapter.pull_messages"
         project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "")
