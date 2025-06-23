@@ -18,25 +18,28 @@ class PhotosFileAdapter:
         """Get all path/filename to all photos on file directory."""
         photos = []
         try:
-            # loop files in directory
-            for f in Path(PHOTOS_FILE_PATH).iterdir():
-                if f.suffix in [".jpg", ".png"] and "_config" not in f.name:
-                        photos.append(f"{PHOTOS_FILE_PATH}/{f.name}")
+            photos = [
+                f"{PHOTOS_FILE_PATH}/{f.name}"
+                for f in Path(PHOTOS_FILE_PATH).iterdir()
+                if f.suffix in [".jpg", ".png"] and "_config" not in f.name
+            ]
         except Exception:
             logging.exception("Error getting photos")
         return photos
 
-    def get_all_photo_urls(self) -> list:
-        """Get all url to all photos on file directory."""
-        photos = []
+    def get_all_file_urls(self, prefix: str, suffix: str) -> list:
+        """Get all url to all files on file directory with given prefix and suffix."""
+        my_files = []
         try:
-            # loop files in directory and find all photos
-            for file in Path(PHOTOS_FILE_PATH).iterdir():
-                if file.suffix in [".jpg", ".png"] and "_config" not in file.name and "_crop" not in file.name:
-                    photos.append(f"{PHOTOS_URL_PATH}/{file.name}")
+            my_files = [
+                f"{PHOTOS_URL_PATH}/{file.name}"
+                for file in Path(PHOTOS_FILE_PATH).iterdir()
+                if file.suffix == suffix and prefix in file.name
+            ]
         except Exception:
-            logging.exception("Error getting photos")
-        return photos
+            informasjon = f"Error getting files, prefix: {prefix}, suffix: {suffix}"
+            logging.exception(informasjon)
+        return my_files
 
     async def get_trigger_line_file_url(self, token: str, event: dict) -> str:
         """Get url to latest trigger line photo."""
