@@ -9,12 +9,17 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 # Install the application dependencies.
 WORKDIR /app
 COPY . /app
-RUN uv sync --frozen
+
+# Create a virtual environment
+RUN python -m venv .venv
+
+# Activate the virtual environment and install dependencies
+RUN . .venv/bin/activate && uv sync --frozen
 
 # Docker label
 LABEL org.opencontainers.image.source=https://github.com/langrenn-sprint/integration-service
 LABEL org.opencontainers.image.description="integration-service"
 LABEL org.opencontainers.image.licenses=Apache-2.0
 
-# Run the application.
-CMD ["python", "-m", "integration_service.app"] 
+# Run the application using the venv Python
+CMD ["/app/.venv/bin/python", "-m", "integration_service.app"]
