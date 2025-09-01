@@ -1,9 +1,21 @@
 ### integration-service
 Service for pushing and pulling messages and file to cloud services such as PubSub and Drive
 
+### If required - virtual environment
+```Zsh
+curl <https://pyenv.run> | bash
+python -m venv .venv
+pyenv install 3.13
+source .venv/bin/activate
+```
+
 ### Start service in virtual env:
 ```Zsh
+set -a
+source .env
+set +a
 .venv/bin/python3 -m integration_service.app
+```
 
 ### But first, start dependencies (services & db):
 
@@ -23,13 +35,6 @@ Then install the dependencies:
 ```Zsh
 uv sync
 ```
-### If required - virtual environment
-
-```Zsh
-curl <https://pyenv.run> | bash
-python -m venv .venv
-pyenv install 3.13
-source .venv/bin/activate
 
 ### Install
 

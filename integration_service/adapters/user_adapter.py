@@ -5,11 +5,7 @@ import os
 from http import HTTPStatus
 
 from aiohttp import ClientSession, hdrs
-from dotenv import load_dotenv
 from multidict import MultiDict
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Get environment variables with validation
 USERS_HOST_SERVER = os.getenv("USERS_HOST_SERVER")
