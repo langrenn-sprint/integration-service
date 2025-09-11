@@ -6,6 +6,8 @@ from pathlib import Path
 from .config_adapter import ConfigAdapter
 
 PHOTOS_FILE_PATH = f"{Path.cwd()}/integration_service/files"
+CAPTURED_FILE_PATH = f"{Path.cwd()}/integration_service/files/CAPTURE"
+CAPTURED_ARCHIVE_PATH = f"{Path.cwd()}/integration_service/files/CAPTURE/archive"
 PHOTOS_ARCHIVE_PATH = f"{PHOTOS_FILE_PATH}/archive"
 PHOTOS_URL_PATH = "files"
 
@@ -34,6 +36,16 @@ class PhotosFileAdapter:
         except Exception:
             logging.exception("Error getting photos")
         return photos
+
+    def get_all_captured_files(self) -> list:
+        """Get all url to all captured files on file directory."""
+        try:
+            files = Path(CAPTURED_FILE_PATH).iterdir()
+            return [f"{CAPTURED_FILE_PATH}/{f.name}" for f in files if f.is_file()]
+        except Exception:
+            informasjon = "Error getting captured files"
+            logging.exception(informasjon)
+        return []
 
     def get_all_files(self, prefix: str, suffix: str) -> list:
         """Get all url to all files on file directory with given prefix and suffix."""
@@ -104,6 +116,20 @@ class PhotosFileAdapter:
         except FileNotFoundError:
             logging.info("Destination folder not found. Creating...")
             Path(PHOTOS_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
+            source_file.rename(destination_file)
+        except Exception:
+            logging.exception("Error moving photo to archive.")
+
+    def move_to_captured_archive(self, filename: str) -> None:
+        """Move photo to archive."""
+        source_file = Path(CAPTURED_FILE_PATH) / filename
+        destination_file = Path(CAPTURED_ARCHIVE_PATH) / source_file.name
+
+        try:
+            source_file.rename(destination_file)
+        except FileNotFoundError:
+            logging.info("Destination folder not found. Creating...")
+            Path(CAPTURED_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
             source_file.rename(destination_file)
         except Exception:
             logging.exception("Error moving photo to archive.")

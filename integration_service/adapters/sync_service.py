@@ -159,10 +159,10 @@ class SyncService:
                 if group["main"] and group["crop"]:
                     # upload photo to cloud storage
                     url_main = GoogleCloudStorageAdapter().upload_blob(
-                        group["main"]
+                        "photos", group["main"]
                     )
                     url_crop = GoogleCloudStorageAdapter().upload_blob(
-                        group["crop"]
+                        "photos", group["crop"]
                     )
 
                     # analyze photo with Vision AI
@@ -228,6 +228,55 @@ class SyncService:
             )
         return informasjon
 
+
+    async def push_captured_video(self, token: str, event: dict) -> str:
+        """Push captured video to cloud storage, analyze and publish."""
+        i_video_count = 0
+        i_error_count = 0
+        informasjon = ""
+        service_name = "push_captured_video"
+        status_type = await ConfigAdapter().get_config(
+            token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
+        )
+
+        # loop videos
+        url_video = ""
+        new_videos = PhotosFileAdapter().get_all_captured_files()
+        for video in new_videos:
+            try:
+                # upload video to cloud storage
+                url_video = GoogleCloudStorageAdapter().upload_blob("CAPTURE", video)
+
+                # archive video - ignore errors
+                try:
+                    PhotosFileAdapter().move_to_captured_archive(
+                        Path(video).name
+                    )
+                except Exception:
+                    error_text = f"{service_name} - Error moving file {video} to archive."
+                    logging.exception(error_text)
+
+                i_video_count += 1
+
+            except Exception as e:
+                error_text = f"{service_name} - {e}"
+                i_error_count += 1
+                await StatusAdapter().create_status(
+                    token,
+                    event,
+                    status_type,
+                    error_text,
+                )
+                logging.exception(error_text)
+        informasjon = f"Pushed {i_video_count} videos (<a href='{url_video}'>link</a>) to pubsub, errors: {i_error_count}"
+        if (i_error_count > 0) or (i_video_count > 0):
+            await StatusAdapter().create_status(
+                token,
+                event,
+                status_type,
+                informasjon,
+            )
+        return informasjon
 
 async def link_ai_info_to_photo(
     token: str, photo_info: dict, ai_information: dict, event: dict, raceclasses: list

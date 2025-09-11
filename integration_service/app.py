@@ -66,10 +66,12 @@ async def main() -> None:
                 if service_config["service_start"]:
                     # run service
                     await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
-                    if service_config["service_mode"] in ["PUSH", "push", "Push"]:
+                    if service_config["service_mode"] in ["push_detections"]:
                         await SyncService().push_new_photos_from_file(token, event)
-                    elif service_config["service_mode"] in ["PULL", "pull", "Pull"]:
+                    elif service_config["service_mode"] in ["pull_detections"]:
                         await SyncService().pull_photos_from_pubsub(token, event)
+                    elif service_config["service_mode"] in ["push_captured_video"]:
+                        await SyncService().push_captured_video(token, event)
                     else:
                         raise_invalid_service_mode(service_config["service_mode"])
                     await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
