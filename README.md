@@ -1,6 +1,6 @@
 ### integration-service
 Service for pushing and pulling messages and files to cloud services such as PubSub and Drive
-valid modes:
+valid storage modes (INTEGRATION_SERVICE_MODE):
 push_captured_video
 push_detections
 pull_detections
