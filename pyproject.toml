@@ -4,7 +4,7 @@ license = "Apache-2.0"
 name = "integration-service"
 readme = "README.md"
 version = "1.1.0"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "aiodns>=3.2.0",
     "aiofiles>=24.1.0",
@@ -22,8 +22,7 @@ dependencies = [
     "requests>=2.32.3",
 ]
 
-[tool.uv]
-dev-dependencies = [
+dependency-groups.dev = [
     "poethepoet>=0.29.0",
     "pyright>=1.1.386",
     "pytest-aiohttp>=1.0.5",

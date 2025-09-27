@@ -5,10 +5,13 @@ from pathlib import Path
 
 from .config_adapter import ConfigAdapter
 
-PHOTOS_FILE_PATH = f"{Path.cwd()}/integration_service/files"
+VISION_ROOT_PATH = f"{Path.cwd()}/integration_service/files"
 CAPTURED_FILE_PATH = f"{Path.cwd()}/integration_service/files/CAPTURE"
 CAPTURED_ARCHIVE_PATH = f"{Path.cwd()}/integration_service/files/CAPTURE/archive"
-PHOTOS_ARCHIVE_PATH = f"{PHOTOS_FILE_PATH}/archive"
+DETECTED_FILE_PATH = f"{Path.cwd()}/integration_service/files/DETECT"
+FILTERED_FILE_PATH = f"{Path.cwd()}/integration_service/files/FILTER"
+FILTERED_ARCHIVE_PATH = f"{Path.cwd()}/integration_service/files/FILTER/archive"
+PHOTOS_ARCHIVE_PATH = f"{VISION_ROOT_PATH}/archive"
 PHOTOS_URL_PATH = "files"
 
 
@@ -17,7 +20,21 @@ class PhotosFileAdapter:
 
     def get_photos_folder_path(self) -> str:
         """Get path to photo folder."""
-        return PHOTOS_FILE_PATH
+        return VISION_ROOT_PATH
+
+    def init_video_folder(self, mode: str) -> None:
+        """Ensure folders exists."""
+        my_folder = Path(f"{VISION_ROOT_PATH}/{mode}")
+        if not my_folder.exists():
+            my_folder.mkdir(parents=True, exist_ok=True)
+
+    def get_detect_folder_path(self) -> str:
+        """Get path to detected images folder."""
+        return DETECTED_FILE_PATH
+
+    def get_capture_folder_path(self) -> str:
+        """Get path to detected images folder."""
+        return CAPTURED_FILE_PATH
 
     def get_photos_archive_folder_path(self) -> str:
         """Get path to photo archive folder."""
@@ -27,9 +44,9 @@ class PhotosFileAdapter:
         """Get all path/filename to all photos on file directory."""
         photos = []
         try:
-            files = list(Path(PHOTOS_FILE_PATH).iterdir())
+            files = list(Path(VISION_ROOT_PATH).iterdir())
             photos = [
-                f"{PHOTOS_FILE_PATH}/{f.name}"
+                f"{VISION_ROOT_PATH}/{f.name}"
                 for f in files
                 if f.suffix in [".jpg", ".png"] and "_config" not in f.name
             ]
@@ -37,7 +54,7 @@ class PhotosFileAdapter:
             logging.exception("Error getting photos")
         return photos
 
-    def get_all_captured_files(self) -> list:
+    def get_all_capture_files(self) -> list:
         """Get all url to all captured files on file directory."""
         try:
             files = Path(CAPTURED_FILE_PATH).iterdir()
@@ -47,13 +64,24 @@ class PhotosFileAdapter:
             logging.exception(informasjon)
         return []
 
+    def get_all_filter_files(self) -> list:
+        """Get all url to all filtered files on file directory."""
+        try:
+            files = Path(FILTERED_FILE_PATH).iterdir()
+            return [f"{FILTERED_FILE_PATH}/{f.name}" for f in files if f.is_file()]
+        except Exception:
+            informasjon = "Error getting captured files"
+            logging.exception(informasjon)
+        return []
+
+
     def get_all_files(self, prefix: str, suffix: str) -> list:
         """Get all url to all files on file directory with given prefix and suffix."""
         my_files = []
         try:
-            files = list(Path(PHOTOS_FILE_PATH).iterdir())  # Materialize iterator and close it
+            files = list(Path(VISION_ROOT_PATH).iterdir())  # Materialize iterator and close it
             my_files = [
-                f"{PHOTOS_FILE_PATH}/{file.name}"
+                f"{VISION_ROOT_PATH}/{file.name}"
                 for file in files
                 if file.suffix == suffix and prefix in file.name
             ]
@@ -69,9 +97,9 @@ class PhotosFileAdapter:
         trigger_line_file_name = ""
         try:
             # Lists files in a directory sorted by creation date, newest first."""
-            files = list(Path(PHOTOS_FILE_PATH).iterdir())  # Materialize iterator and close it
+            files = list(Path(VISION_ROOT_PATH).iterdir())  # Materialize iterator and close it
             files_with_ctime = [
-                (f, (Path(PHOTOS_FILE_PATH) / f).stat().st_ctime) for f in files
+                (f, (Path(VISION_ROOT_PATH) / f).stat().st_ctime) for f in files
             ]
             sorted_files = [
                 f[0] for f in sorted(files_with_ctime, key=lambda x: x[1], reverse=True)
@@ -93,7 +121,7 @@ class PhotosFileAdapter:
 
     def move_photo_to_archive(self, filename: str) -> None:
         """Move photo to archive."""
-        source_file = Path(PHOTOS_FILE_PATH) / filename
+        source_file = Path(VISION_ROOT_PATH) / filename
         destination_file = Path(PHOTOS_ARCHIVE_PATH) / source_file.name
 
         try:
@@ -108,7 +136,7 @@ class PhotosFileAdapter:
 
     def move_to_archive(self, filename: str) -> None:
         """Move photo to archive."""
-        source_file = Path(PHOTOS_FILE_PATH) / filename
+        source_file = Path(VISION_ROOT_PATH) / filename
         destination_file = Path(PHOTOS_ARCHIVE_PATH) / source_file.name
 
         try:
@@ -130,6 +158,34 @@ class PhotosFileAdapter:
         except FileNotFoundError:
             logging.info("Destination folder not found. Creating...")
             Path(CAPTURED_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
+            source_file.rename(destination_file)
+        except Exception:
+            logging.exception("Error moving photo to archive.")
+
+    def move_to_capture_archive(self, filename: str) -> None:
+        """Move photo to archive."""
+        source_file = Path(CAPTURED_FILE_PATH) / filename
+        destination_file = Path(CAPTURED_ARCHIVE_PATH) / filename
+
+        try:
+            source_file.rename(destination_file)
+        except FileNotFoundError:
+            logging.info("Destination folder not found. Creating.")
+            Path(CAPTURED_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
+            source_file.rename(destination_file)
+        except Exception:
+            logging.exception("Error moving photo to archive.")
+
+    def move_to_filter_archive(self, filename: str) -> None:
+        """Move photo to archive."""
+        source_file = Path(FILTERED_FILE_PATH) / filename
+        destination_file = Path(FILTERED_ARCHIVE_PATH) / filename
+
+        try:
+            source_file.rename(destination_file)
+        except FileNotFoundError:
+            logging.info("Destination folder not found. Creating.")
+            Path(FILTERED_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
             source_file.rename(destination_file)
         except Exception:
             logging.exception("Error moving photo to archive.")

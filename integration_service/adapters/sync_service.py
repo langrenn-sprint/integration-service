@@ -241,7 +241,7 @@ class SyncService:
 
         # loop videos
         url_video = ""
-        new_videos = PhotosFileAdapter().get_all_captured_files()
+        new_videos = PhotosFileAdapter().get_all_capture_files()
         for video in new_videos:
             try:
                 # upload video to cloud storage

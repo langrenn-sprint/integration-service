@@ -1,13 +1,13 @@
 ### integration-service
 Service for pushing and pulling messages and files to cloud services such as PubSub and Drive
 valid storage modes (INTEGRATION_SERVICE_MODE):
-push_captured_video
-push_detections
-pull_detections
+push_captured_video - pushing video to cloud bucket
+push_detections - pushing image to cloud bucket and message to pubsub
+pull_detections - pulling message from pubsub
 
 ### If required - virtual environment
 ```Zsh
-curl <https://pyenv.run> | bash
+curl https://pyenv.run | bash
 python -m venv .venv
 pyenv install 3.13
 source .venv/bin/activate
@@ -18,7 +18,7 @@ source .venv/bin/activate
 set -a
 source .env
 set +a
-.venv/bin/python3 -m integration_service.app
+python -m integration_service.app
 ```
 
 ### But first, start dependencies (services & db):
