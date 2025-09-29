@@ -19,4 +19,4 @@ LABEL org.opencontainers.image.licenses=Apache-2.0
 # Run the application using the venv Python
 ## Run the application using the virtualenv-managed Python provided by uv (/uvx)
 ## This ensures packages installed by `uv sync` are available at runtime.
-CMD ["/uvx", "python", "-m", "integration_service.app"]
+CMD ["/app/.venv/bin/python", "-m", "integration_service.app"]
