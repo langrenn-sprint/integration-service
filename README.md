@@ -1,9 +1,6 @@
 ### integration-service
-Service for pushing and pulling messages and files to cloud services such as PubSub and Drive
-valid storage modes (INTEGRATION_SERVICE_MODE):
-push_captured_video - pushing video to cloud bucket
-push_detections - pushing image to cloud bucket and message to pubsub
-pull_detections - pulling message from pubsub
+Service for pushing and pulling messages and files to cloud services such as PubSub and Drive.
+Supporting both cloud and local storage mode (VIDEO_STORAGE_MODE - "cloud_storage", "local_storage" or "pull_detections")
 
 ### If required - virtual environment
 ```Zsh

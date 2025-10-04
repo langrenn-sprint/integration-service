@@ -66,14 +66,14 @@ async def main() -> None:
                 if service_config["service_start"]:
                     # run service
                     await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
-                    if service_config["service_mode"] in ["push_detections"]:
+                    if service_config["storage_mode"] in ["cloud_storage", "local_storage"]:
                         await SyncService().push_new_photos_from_file(token, event)
-                    elif service_config["service_mode"] in ["pull_detections"]:
+                        if service_config["storage_mode"] in ["cloud_storage"]:
+                            await SyncService().push_captured_video(token, event)
+                    elif service_config["storage_mode"] in ["pull_detections"]:
                         await SyncService().pull_photos_from_pubsub(token, event)
-                    elif service_config["service_mode"] in ["push_captured_video"]:
-                        await SyncService().push_captured_video(token, event)
                     else:
-                        raise_invalid_service_mode(service_config["service_mode"])
+                        raise_invalid_storage_mode(service_config["storage_mode"])
                     await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
                 else:
                     # should be invalid (no muliti thread) - reset
@@ -96,7 +96,7 @@ async def main() -> None:
                     token, event["id"], "INTEGRATION_SERVICE_START", "False"
                 )
             if i > STATUS_INTERVAL:
-                informasjon = f"Integration Service kjører i modus {service_config['service_mode']}."
+                informasjon = f"Integration Service kjører i modus {service_config['storage_mode']}."
                 await StatusAdapter().create_status(
                     token, event, status_type, informasjon
                 )
@@ -116,9 +116,9 @@ async def main() -> None:
     logging.info("Goodbye!")
 
 
-def raise_invalid_service_mode(service_mode: str) -> None:
-    """Raise exception for invalid service mode."""
-    err_string = f"Invalid service mode: {service_mode}. Use 'push' or 'pull'."
+def raise_invalid_storage_mode(storage_mode: str) -> None:
+    """Raise exception for invalid storage mode."""
+    err_string = f"Invalid storage mode: {storage_mode}."
     raise Exception(err_string)
 
 
@@ -184,14 +184,14 @@ async def get_service_status(token: str, event: dict) -> dict:
     service_start = await ConfigAdapter().get_config_bool(
         token, event["id"], "INTEGRATION_SERVICE_START"
     )
-    service_mode = await ConfigAdapter().get_config(
-        token, event["id"], "INTEGRATION_SERVICE_MODE"
+    storage_mode = await ConfigAdapter().get_config(
+        token, event["id"], "VIDEO_STORAGE_MODE"
     )
     return {
         "service_available": service_available,
         "service_running": service_running,
         "service_start": service_start,
-        "service_mode": service_mode
+        "storage_mode": storage_mode
     }
 
 

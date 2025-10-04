@@ -268,7 +268,7 @@ class SyncService:
                     error_text,
                 )
                 logging.exception(error_text)
-        informasjon = f"Pushed {i_video_count} videos (<a href='{url_video}'>link</a>) to pubsub, errors: {i_error_count}"
+        informasjon = f"Pushed {i_video_count} videos (<a href='{url_video}'>link</a>) to cloud bucket, errors: {i_error_count}"
         if (i_error_count > 0) or (i_video_count > 0):
             await StatusAdapter().create_status(
                 token,
