@@ -6,5 +6,4 @@
     "INTEGRATION_SERVICE_RUNNING": "False",
     "INTEGRATION_SERVICE_STATUS_TYPE": "integration_status",
     "RACE_DURATION_ESTIMATE": 300,
-    "TRIGGER_LINE_CONFIG_FILE": "Trigger_line_config.jpg"
 }

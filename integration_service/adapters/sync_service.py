@@ -159,10 +159,10 @@ class SyncService:
                 if group["main"] and group["crop"]:
                     # upload photo to cloud storage
                     url_main = GoogleCloudStorageAdapter().upload_blob(
-                        "photos", group["main"]
+                        event["id"], "photos", group["main"]
                     )
                     url_crop = GoogleCloudStorageAdapter().upload_blob(
-                        "photos", group["crop"]
+                        event["id"], "photos", group["crop"]
                     )
 
                     # analyze photo with Vision AI
@@ -245,7 +245,7 @@ class SyncService:
         for video in new_videos:
             try:
                 # upload video to cloud storage
-                url_video = GoogleCloudStorageAdapter().upload_blob("CAPTURE", video)
+                url_video = GoogleCloudStorageAdapter().upload_blob(event["id"], "CAPTURE", video)
 
                 # archive video - ignore errors
                 try:
