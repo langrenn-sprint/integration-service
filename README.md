@@ -114,3 +114,10 @@ docker compose down
 docker network prune
 docker container prune
 docker rmi $(docker images -q)
+
+### Troubleshooting - related to file handling
+Failed to create DNS resolver channel with automatic monitoring of resolver configuration changes.
+```Zsh
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```
