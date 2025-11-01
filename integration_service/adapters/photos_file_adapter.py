@@ -58,7 +58,11 @@ class PhotosFileAdapter:
         """Get all url to all captured files on file directory."""
         try:
             files = Path(CAPTURED_FILE_PATH).iterdir()
-            return [f"{CAPTURED_FILE_PATH}/{f.name}" for f in files if f.is_file()]
+            return [
+                f"{CAPTURED_FILE_PATH}/{f.name}"
+                for f in files
+                if f.is_file() and not f.name.startswith("TMP")
+            ]
         except Exception:
             informasjon = "Error getting captured files"
             logging.exception(informasjon)
