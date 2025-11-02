@@ -3,14 +3,15 @@
 import logging
 from pathlib import Path
 
-from .config_adapter import ConfigAdapter
+from integration_service.adapters.google_cloud_storage_adapter import (
+    GoogleCloudStorageAdapter,
+)
 
 VISION_ROOT_PATH = f"{Path.cwd()}/integration_service/files"
 CAPTURED_FILE_PATH = f"{Path.cwd()}/integration_service/files/CAPTURE"
 CAPTURED_ARCHIVE_PATH = f"{Path.cwd()}/integration_service/files/CAPTURE/archive"
+CAPTURED_ERROR_ARCHIVE_PATH = f"{Path.cwd()}/integration_service/files/CAPTURE/error_archive"
 DETECTED_FILE_PATH = f"{Path.cwd()}/integration_service/files/DETECT"
-FILTERED_FILE_PATH = f"{Path.cwd()}/integration_service/files/FILTER"
-FILTERED_ARCHIVE_PATH = f"{Path.cwd()}/integration_service/files/FILTER/archive"
 PHOTOS_ARCHIVE_PATH = f"{VISION_ROOT_PATH}/archive"
 PHOTOS_URL_PATH = "files"
 
@@ -28,13 +29,13 @@ class PhotosFileAdapter:
         if not my_folder.exists():
             my_folder.mkdir(parents=True, exist_ok=True)
 
-    def get_detect_folder_path(self) -> str:
-        """Get path to detected images folder."""
-        return DETECTED_FILE_PATH
-
     def get_capture_folder_path(self) -> str:
         """Get path to detected images folder."""
         return CAPTURED_FILE_PATH
+
+    def get_detect_folder_path(self) -> str:
+        """Get path to detected images folder."""
+        return DETECTED_FILE_PATH
 
     def get_photos_archive_folder_path(self) -> str:
         """Get path to photo archive folder."""
@@ -54,30 +55,26 @@ class PhotosFileAdapter:
             logging.exception("Error getting photos")
         return photos
 
-    def get_all_capture_files(self) -> list:
+    def get_all_capture_files(self, event_id: str, storage_mode: str) ->  list[dict]:
         """Get all url to all captured files on file directory."""
+        file_list = []
         try:
-            files = Path(CAPTURED_FILE_PATH).iterdir()
-            return [
-                f"{CAPTURED_FILE_PATH}/{f.name}"
-                for f in files
-                if f.is_file() and not f.name.startswith("TMP")
-            ]
+            if storage_mode == "cloud_storage":
+                file_list = GoogleCloudStorageAdapter().list_blobs(event_id, "CAPTURE/")
+            else:
+                # Local file system
+                files = list(Path(CAPTURED_FILE_PATH).iterdir())
+                file_list = [
+                    {"name": f.name, "url": f"{CAPTURED_FILE_PATH}/{f.name}"}
+                    for f in files
+                if f.is_file()
+                ]
         except Exception:
             informasjon = "Error getting captured files"
             logging.exception(informasjon)
-        return []
-
-    def get_all_filter_files(self) -> list:
-        """Get all url to all filtered files on file directory."""
-        try:
-            files = Path(FILTERED_FILE_PATH).iterdir()
-            return [f"{FILTERED_FILE_PATH}/{f.name}" for f in files if f.is_file()]
-        except Exception:
-            informasjon = "Error getting captured files"
-            logging.exception(informasjon)
-        return []
-
+            return []
+        else:
+            return file_list
 
     def get_all_files(self, prefix: str, suffix: str) -> list:
         """Get all url to all files on file directory with given prefix and suffix."""
@@ -123,25 +120,14 @@ class PhotosFileAdapter:
         except Exception:
             logging.exception("Error moving photo to archive.")
 
-    def move_to_captured_archive(self, filename: str) -> None:
-        """Move photo to archive."""
-        source_file = Path(CAPTURED_FILE_PATH) / filename
-        destination_file = Path(CAPTURED_ARCHIVE_PATH) / source_file.name
-
-        try:
-            source_file.rename(destination_file)
-        except FileNotFoundError:
-            logging.info("Destination folder not found. Creating...")
-            Path(CAPTURED_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
-            source_file.rename(destination_file)
-        except Exception:
-            logging.exception("Error moving photo to archive.")
-
-    def move_to_capture_archive(self, filename: str) -> None:
-        """Move photo to archive."""
+    def move_to_capture_archive(self, event_id: str, storage_mode: str, filename: str) -> str:
+        """Move photo to local archive."""
+        if storage_mode == "cloud_storage":
+            return GoogleCloudStorageAdapter().move_to_capture_archive(
+                event_id, filename
+            )
         source_file = Path(CAPTURED_FILE_PATH) / filename
         destination_file = Path(CAPTURED_ARCHIVE_PATH) / filename
-
         try:
             source_file.rename(destination_file)
         except FileNotFoundError:
@@ -149,18 +135,23 @@ class PhotosFileAdapter:
             Path(CAPTURED_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
             source_file.rename(destination_file)
         except Exception:
-            logging.exception("Error moving photo to archive.")
+            logging.exception(f"Error moving photo to archive: {filename}")
+        return destination_file.name
 
-    def move_to_filter_archive(self, filename: str) -> None:
-        """Move photo to archive."""
-        source_file = Path(FILTERED_FILE_PATH) / filename
-        destination_file = Path(FILTERED_ARCHIVE_PATH) / filename
-
+    def move_to_error_archive(self, event_id: str, storage_mode: str, filename: str) -> str:
+        """Move photo to local error archive."""
+        if storage_mode == "cloud_storage":
+            return GoogleCloudStorageAdapter().move_to_error_archive(
+                event_id, filename
+            )
+        source_file = Path(CAPTURED_FILE_PATH) / filename
+        destination_file = Path(CAPTURED_ERROR_ARCHIVE_PATH) / filename
         try:
             source_file.rename(destination_file)
         except FileNotFoundError:
             logging.info("Destination folder not found. Creating.")
-            Path(FILTERED_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
+            Path(CAPTURED_ERROR_ARCHIVE_PATH).mkdir(parents=True, exist_ok=True)
             source_file.rename(destination_file)
         except Exception:
-            logging.exception("Error moving photo to archive.")
+            logging.exception(f"Error moving photo to error archive: {filename}")
+        return destination_file.name

@@ -241,19 +241,21 @@ class SyncService:
 
         # loop videos
         url_video = ""
-        new_videos = PhotosFileAdapter().get_all_capture_files()
+        new_videos = PhotosFileAdapter().get_all_capture_files(event["id"], "local_storage")
         for video in new_videos:
             try:
                 # upload video to cloud storage
-                url_video = GoogleCloudStorageAdapter().upload_blob(event["id"], "CAPTURE", video)
+                url_video = GoogleCloudStorageAdapter().upload_blob(event["id"], "CAPTURE", video["url"])
 
                 # archive video - ignore errors
                 try:
-                    PhotosFileAdapter().move_to_captured_archive(
-                        Path(video).name
+                    PhotosFileAdapter().move_to_capture_archive(
+                        event["id"],
+                        "local_storage",
+                        video["name"],
                     )
                 except Exception:
-                    error_text = f"{service_name} - Error moving file {video} to archive."
+                    error_text = f"{service_name} - Error moving file {video["name"]} to local archive."
                     logging.exception(error_text)
 
                 i_video_count += 1
@@ -268,6 +270,11 @@ class SyncService:
                     error_text,
                 )
                 logging.exception(error_text)
+                PhotosFileAdapter().move_to_error_archive(
+                    event["id"],
+                    "local_storage",
+                    video["name"],
+                )
         informasjon = f"Pushed {i_video_count} videos (<a href='{url_video}'>link</a>) to cloud bucket, errors: {i_error_count}"
         if (i_error_count > 0) or (i_video_count > 0):
             await StatusAdapter().create_status(
