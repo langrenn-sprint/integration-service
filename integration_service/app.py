@@ -68,8 +68,7 @@ async def main() -> None:
                     await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
                     if service_config["storage_mode"] in ["cloud_storage", "local_storage"]:
                         await SyncService().push_new_photos_from_file(token, event)
-                        if service_config["storage_mode"] in ["cloud_storage"]:
-                            await SyncService().push_captured_video(token, event)
+                        await SyncService().process_captured_raw_videos(token, event, service_config["storage_mode"])
                     elif service_config["storage_mode"] in ["pull_detections"]:
                         await SyncService().pull_photos_from_pubsub(token, event)
                     else:

@@ -229,9 +229,10 @@ class SyncService:
         return informasjon
 
 
-    async def push_captured_video(self, token: str, event: dict) -> str:
-        """Push captured video to cloud storage, analyze and publish."""
+    async def process_captured_raw_videos(self, token: str, event: dict, storage_mode: str) -> str:
+        """Process captured raw videos and push to cloud storage if needed."""
         i_video_count = 0
+        i_raw_video_count = 0
         i_error_count = 0
         informasjon = ""
         service_name = "push_captured_video"
@@ -239,43 +240,51 @@ class SyncService:
             token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
         )
 
-        # loop videos
-        url_video = ""
-        new_videos = PhotosFileAdapter().get_all_capture_files(event["id"], "local_storage")
-        for video in new_videos:
-            try:
-                # upload video to cloud storage
-                url_video = GoogleCloudStorageAdapter().upload_blob(event["id"], "CAPTURE", video["url"])
+        # loop raw videos and convert/repair
+        raw_videos = PhotosFileAdapter().get_all_raw_capture_files(event["id"], "local_storage")
+        for raw_video in raw_videos:
+            PhotosFileAdapter().convert_raw_to_mp4(raw_video["url"])
+            i_raw_video_count += 1
+        informasjon += f"Converted {i_raw_video_count} raw videos. "
 
-                # archive video - ignore errors
+        # loop videos and upload to cloud storage
+        if storage_mode == "cloud_storage":
+            url_video = ""
+            new_videos = PhotosFileAdapter().get_all_capture_files(event["id"], "local_storage")
+            for video in new_videos:
                 try:
-                    PhotosFileAdapter().move_to_capture_archive(
+                    # upload video to cloud storage
+                    url_video = GoogleCloudStorageAdapter().upload_blob(event["id"], "CAPTURE", video["url"])
+
+                    # archive video - ignore errors
+                    try:
+                        PhotosFileAdapter().move_to_capture_archive(
+                            event["id"],
+                            "local_storage",
+                            video["name"],
+                        )
+                    except Exception:
+                        error_text = f"{service_name} - Error moving file {video["name"]} to local archive."
+                        logging.exception(error_text)
+
+                    i_video_count += 1
+
+                except Exception as e:
+                    error_text = f"{service_name} - {e}"
+                    i_error_count += 1
+                    await StatusAdapter().create_status(
+                        token,
+                        event,
+                        status_type,
+                        error_text,
+                    )
+                    logging.exception(error_text)
+                    PhotosFileAdapter().move_to_error_archive(
                         event["id"],
                         "local_storage",
                         video["name"],
                     )
-                except Exception:
-                    error_text = f"{service_name} - Error moving file {video["name"]} to local archive."
-                    logging.exception(error_text)
-
-                i_video_count += 1
-
-            except Exception as e:
-                error_text = f"{service_name} - {e}"
-                i_error_count += 1
-                await StatusAdapter().create_status(
-                    token,
-                    event,
-                    status_type,
-                    error_text,
-                )
-                logging.exception(error_text)
-                PhotosFileAdapter().move_to_error_archive(
-                    event["id"],
-                    "local_storage",
-                    video["name"],
-                )
-        informasjon = f"Pushed {i_video_count} videos (<a href='{url_video}'>link</a>) to cloud bucket, errors: {i_error_count}"
+            informasjon += f"Pushed {i_video_count} videos (<a href='{url_video}'>link</a>) to cloud bucket, errors: {i_error_count}"
         if (i_error_count > 0) or (i_video_count > 0):
             await StatusAdapter().create_status(
                 token,
