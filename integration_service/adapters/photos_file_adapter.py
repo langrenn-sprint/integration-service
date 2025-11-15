@@ -92,7 +92,7 @@ class PhotosFileAdapter:
                 file_list = [
                     {"name": f.name, "url": f"{CAPTURED_RAW_FILE_PATH}/{f.name}"}
                     for f in files
-                if f.is_file()
+                    if f.is_file() and not f.name.startswith("TMP")
                 ]
         except Exception:
             informasjon = "Error getting captured files"
