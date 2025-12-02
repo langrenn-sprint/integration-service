@@ -17,7 +17,7 @@ from integration_service.adapters import (
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 event = {"id": ""}
 status_type = ""
-STATUS_INTERVAL = 60
+STATUS_INTERVAL = 240
 
 # set up logging
 LOGGING_LEVEL = os.getenv("LOGGING_LEVEL", "INFO")
@@ -67,7 +67,6 @@ async def main() -> None:
                     # run service
                     await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
                     if service_config["storage_mode"] in ["cloud_storage", "local_storage"]:
-                        await SyncService().push_new_photos_from_file(token, event)
                         await SyncService().process_captured_raw_videos(token, event, service_config["storage_mode"])
                     elif service_config["storage_mode"] in ["pull_detections"]:
                         await SyncService().pull_photos_from_pubsub(token, event)

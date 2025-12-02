@@ -132,6 +132,49 @@ class GoogleCloudStorageAdapter:
             logging.exception("Error moving photo to archive.")
         return destination_file
 
+    def list_detect_blobs(self, event_id: str) -> list[dict]:
+        """List all detected blobs in the bucket."""
+        servicename = "GoogleCloudStorageAdapter.list_detect_blobs"
+        detect_blobs = []
+        storage_bucket = os.getenv("GOOGLE_STORAGE_BUCKET", "")
+        if storage_bucket == "":
+            err_msg = "GOOGLE_STORAGE_BUCKET not found in .env"
+            raise Exception(err_msg)
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(storage_bucket)
+
+        try:
+            all_detected_blobs = list(bucket.list_blobs(prefix=f"{event_id}/DETECT/"))
+
+            for blob in all_detected_blobs:
+                if blob.metadata:
+                    metadata = blob.metadata
+                    if metadata["image_type"] == "detection":
+                        detection = {
+                            "name": blob.name,
+                            "url": blob.public_url,
+                            "crop_name": blob.name.replace(".jpg", "_crop.jpg"),
+                            "crop_url": blob.public_url.replace(".jpg", "_crop.jpg"),
+                            "metadata": metadata
+                        }
+                        detect_blobs.append(detection)
+
+        except Forbidden as e:
+            informasjon = f"{servicename} Access denied listing blobs for {bucket.name}"
+            logging.exception(informasjon)
+            raise Exception(informasjon) from e
+        except NotFound as e:
+            informasjon = f"{servicename} Bucket {bucket.name} not found"
+            logging.exception(informasjon)
+            raise Exception(informasjon) from e
+        except Exception as e:
+            logging.exception(servicename)
+            raise Exception(servicename) from e
+
+        return detect_blobs
+
+
+
     def list_blobs(self, event_id: str, prefix: str) -> list[dict]:
         """List all blobs in the bucket that begin with the prefix."""
         servicename = "GoogleCloudStorageAdapter.get_blobs"

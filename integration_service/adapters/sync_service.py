@@ -33,109 +33,114 @@ class SyncService:
         token: str,
         event: dict,
     ) -> str:
-        """Get events from pubsub and sync with local database."""
+        """Get new detections from cloud storage and sync with local database."""
         informasjon = ""
         status_type = await ConfigAdapter().get_config(
             token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
         )
         i_c = 0
         i_u = 0
-        i_other = 0
-        # get all messages from pubsub
 
-        pull_messages = GooglePubSubAdapter().pull_messages()
-        if len(pull_messages) == 0:
+        detect_list = GoogleCloudStorageAdapter().list_detect_blobs(event["id"])
+        if len(detect_list) == 0:
             informasjon = "Ingen bilder funnet."
         else:
             raceclasses = await RaceclassesAdapter().get_raceclasses(
                 token, event["id"]
             )
-            for message in pull_messages:
+            for detection in detect_list:
                 # use message data to identify contestant/bib and race
                 # then create photo
                 # check if message event_id is same as event_id
-                if message["event_id"] == event["id"]:
-                    try:
-                        creation_time = message["photo_info"]["passeringstid"]
-                    except Exception:
-                        creation_time = ""
-                    # update or create record in db
-                    try:
-                        photo = await PhotosAdapter().get_photo_by_g_base_url(
-                            token, message["photo_url"]
-                        )
-                    except Exception:
-                        photo = {}
-                    if photo:
-                        # update existing photo
-                        photo["name"] = Path(message["photo_url"]).name
-                        photo["g_crop_url"] = ""
-                        photo["g_base_url"] = message["photo_url"]
-                        if message["photo_info"]["passeringspunkt"] in [
-                            "Finish",
-                            "Mål",
-                        ]:
-                            photo["is_photo_finish"] = True
-                        if message["photo_info"]["passeringspunkt"] == "Start":
-                            photo["is_start_registration"] = True
-                        result = await PhotosAdapter().update_photo(
-                            token, photo["id"], photo
-                        )
-                        logging.debug(
-                            f"Updated photo with id {photo['id']}, result {result}"
-                        )
-                        i_u += 1
-                    else:
-                        # create new photo
-                        photo_info = {
-                            "confidence": 0,
-                            "name": Path(message["photo_url"]).name,
-                            "is_photo_finish": False,
-                            "is_start_registration": False,
-                            "starred": False,
-                            "event_id": event["id"],
-                            "creation_time": await format_time(token, event, creation_time),
-                            "ai_information": message["ai_information"],
-                            "information": message["photo_info"],
-                            "race_id": "",
-                            "raceclass": "",
-                            "biblist": [],
-                            "clublist": [],
-                            "g_crop_url": message["crop_url"],
-                            "g_base_url": message["photo_url"],
-                        }
-                        # new photo - try to link with event activities
-                        if message["photo_info"]["passeringspunkt"] in [
-                            "Finish",
-                            "Mål",
-                        ]:
-                            photo_info["is_photo_finish"] = True
-                        if message["photo_info"]["passeringspunkt"] == "Start":
-                            photo_info["is_start_registration"] = True
-                        if message["ai_information"]:
-                            result = await link_ai_info_to_photo(
-                                token,
-                                photo_info,
-                                message["ai_information"],
-                                event,
-                                raceclasses,
-                            )
+                try:
+                    creation_time = detection["metadata"]["passeringstid"]
+                except Exception:
+                    creation_time = ""
+                # update or create record in db
+                try:
+                    photo = await PhotosAdapter().get_photo_by_g_base_url(
+                        token, detection["url"]
+                    )
+                except Exception:
+                    photo = {}
 
-                        photo_id = await PhotosAdapter().create_photo(
-                            token, photo_info
-                        )
-                        await ConfigAdapter().update_config(
-                            token, event["id"], "GOOGLE_LATEST_PHOTO", message["photo_url"]
-                        )
-                        logging.debug(f"Created photo with id {photo_id}")
-                        i_c += 1
+                if photo:
+                    # update existing photo
+                    photo["name"] = Path(detection["url"]).name
+                    photo["g_crop_url"] = ""
+                    photo["g_base_url"] = detection["url"]
+                    if detection["metadata"]["passeringspunkt"] in [
+                        "Finish",
+                        "Mål",
+                    ]:
+                        photo["is_photo_finish"] = True
+                    if detection["metadata"]["passeringspunkt"] == "Start":
+                        photo["is_start_registration"] = True
+                    result = await PhotosAdapter().update_photo(
+                        token, photo["id"], photo
+                    )
+                    logging.debug(
+                        f"Updated photo with id {photo['id']}, result {result}"
+                    )
+                    i_u += 1
                 else:
-                    i_other += 1
+                    # create new photo
+                    photo_info = {
+                        "confidence": 0,
+                        "name": Path(detection["url"]).name,
+                        "is_photo_finish": False,
+                        "is_start_registration": False,
+                        "starred": False,
+                        "event_id": event["id"],
+                        "creation_time": await format_time(token, event, creation_time),
+                        "ai_information": {},
+                        "information": detection["metadata"],
+                        "race_id": "",
+                        "raceclass": "",
+                        "biblist": [],
+                        "clublist": [],
+                        "g_crop_url": detection["crop_url"],
+                        "g_base_url": detection["url"],
+                    }
+
+                    # analyze photo with Vision AI
+                    try:
+                        conf_limit = await ConfigAdapter().get_config(token, event["id"], "CONFIDENCE_LIMIT")
+                        photo_info["ai_information"] = AiImageService().analyze_photo_g_langrenn_v2(
+                            detection["url"], detection["crop_url"], conf_limit
+                        )
+                    except Exception as e:
+                        error_text = f"AiImageService - Error analysing photos {detection['url']}"
+                        logging.exception(error_text)
+                        raise Exception(error_text) from e
+
+                    # new photo - try to link with event activities
+                    if detection["metadata"]["passeringspunkt"] in [
+                        "Finish",
+                        "Mål",
+                    ]:
+                        photo_info["is_photo_finish"] = True
+                    if detection["metadata"]["passeringspunkt"] == "Start":
+                        photo_info["is_start_registration"] = True
+                    if photo_info["ai_information"]:
+                        result = await link_ai_info_to_photo(
+                            token,
+                            photo_info,
+                            event,
+                            raceclasses,
+                        )
+
+                    photo_id = await PhotosAdapter().create_photo(
+                        token, photo_info
+                    )
+                    await ConfigAdapter().update_config(
+                        token, event["id"], "GOOGLE_LATEST_PHOTO", detection["url"]
+                    )
+                    logging.debug(f"Created photo with id {photo_id}")
+                    i_c += 1
             informasjon = (
-                f"Synkronisert bilder fra PubSub. {i_u} oppdatert og {i_c} opprettet."
+                f"Synkronisert bilder fra Google Cloud Storage. {i_u} oppdatert og {i_c} opprettet."
             )
-            if i_other > 0:
-                informasjon += f" Forkastet {i_other} meldinger som ikke tilhører dette arrangementet."
             await StatusAdapter().create_status(token, event, status_type, informasjon)
         return informasjon
 
@@ -295,12 +300,12 @@ class SyncService:
         return informasjon
 
 async def link_ai_info_to_photo(
-    token: str, photo_info: dict, ai_information: dict, event: dict, raceclasses: list
+    token: str, photo_info: dict, event: dict, raceclasses: list
 ) -> int:
     """Link ai information to photo."""
     # first check for bib on cropped image
     result = HTTPStatus.NO_CONTENT
-    for nummer in ai_information["ai_crop_numbers"]:
+    for nummer in photo_info["ai_information"]["ai_crop_numbers"]:
         result = await find_race_info_by_bib(
             token, nummer, photo_info, event, raceclasses, 100
         )

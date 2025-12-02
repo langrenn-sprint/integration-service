@@ -6,4 +6,5 @@
     "INTEGRATION_SERVICE_RUNNING": "False",
     "INTEGRATION_SERVICE_STATUS_TYPE": "integration_status",
     "RACE_DURATION_ESTIMATE": 300,
+    "VIDEO_STORAGE_MODE": "cloud_storage"
 }
