@@ -149,15 +149,16 @@ class SyncService:
                             raceclasses,
                         )
 
-                        photo_id = await PhotosAdapter().create_photo(
-                            token, photo
-                        )
-                        logging.debug(f"Created photo with id {photo_id}")
-                        i_c += 1
-                        # move processed blob to archive
-                        GoogleCloudStorageAdapter().move_to_detect_archive(
-                            event["id"], Path(photo["g_base_url"]).name
-                        )
+                    photo["g_base_url"] = photo["g_base_url"].replace("/DETECT/", "/DETECT_ARCHIVE/")
+                    photo_id = await PhotosAdapter().create_photo(
+                        token, photo
+                    )
+                    logging.debug(f"Created photo with id {photo_id}")
+                    i_c += 1
+                    # move processed blob to archive
+                    GoogleCloudStorageAdapter().move_to_detect_archive(
+                        event["id"], Path(photo["g_base_url"]).name
+                    )
                 await ConfigAdapter().update_config(
                     token, event["id"], "GOOGLE_LATEST_PHOTO", new_photos[0]["g_base_url"]
                 )
