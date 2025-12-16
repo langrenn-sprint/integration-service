@@ -62,7 +62,6 @@ async def main() -> None:
         while True:
             service_config = await get_service_status(token, event)
             try:
-                # run simulation
                 if service_config["service_start"]:
                     # run service
                     await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")

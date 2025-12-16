@@ -3,7 +3,7 @@
 import datetime
 import json
 import logging
-import os
+from collections import Counter
 from http import HTTPStatus
 from pathlib import Path
 
@@ -12,7 +12,6 @@ import piexif
 from .ai_image_service import AiImageService
 from .config_adapter import ConfigAdapter
 from .contestants_adapter import ContestantsAdapter
-from .events_adapter import EventsAdapter
 from .google_cloud_storage_adapter import GoogleCloudStorageAdapter
 from .google_pub_sub_adapter import GooglePubSubAdapter
 from .photos_adapter import PhotosAdapter
@@ -27,6 +26,61 @@ BIG_DIFF = 99999
 
 class SyncService:
     """Class representing sync service."""
+
+    async def create_new_photo_from_detection(
+        self, token: str, event: dict, detection: dict
+    ) -> dict:
+        """Create new photo info from detection data and analyze with Vision AI.
+
+        Args:
+            token: Authentication token
+            event: Event dictionary
+            detection: Detection data containing url, crop_url, and metadata
+
+        Returns:
+            Photo info dictionary ready to be created
+
+        """
+        creation_time = detection["metadata"]["passeringstid"]
+        photo_info = {
+            "confidence": 0,
+            "name": Path(detection["url"]).name,
+            "is_photo_finish": False,
+            "is_start_registration": False,
+            "starred": False,
+            "event_id": event["id"],
+            "creation_time": await format_time(token, event, creation_time),
+            "ai_information": {},
+            "information": detection["metadata"],
+            "race_id": "",
+            "raceclass": "",
+            "biblist": [],
+            "clublist": [],
+            "g_crop_url": detection["crop_url"],
+            "g_base_url": detection["url"],
+        }
+
+        # analyze photo with Vision AI
+        try:
+            conf_limit = await ConfigAdapter().get_config(token, event["id"], "CONFIDENCE_LIMIT")
+            photo_info["ai_information"] = AiImageService().analyze_photo_g_langrenn_v2(
+                detection["url"], detection["crop_url"], conf_limit
+            )
+        except Exception as e:
+            error_text = f"AiImageService - Error analysing photos {detection['url']}"
+            logging.exception(error_text)
+            raise Exception(error_text) from e
+
+        # new photo - try to link with event activities
+        if detection["metadata"]["passeringspunkt"] in [
+            "Finish",
+            "Mål",
+        ]:
+            photo_info["is_photo_finish"] = True
+        if detection["metadata"]["passeringspunkt"] == "Start":
+            photo_info["is_start_registration"] = True
+
+        return photo_info
 
     async def pull_photos_from_pubsub(
         self,
@@ -48,14 +102,8 @@ class SyncService:
             raceclasses = await RaceclassesAdapter().get_raceclasses(
                 token, event["id"]
             )
+            new_photos = []
             for detection in detect_list:
-                # use message data to identify contestant/bib and race
-                # then create photo
-                # check if message event_id is same as event_id
-                try:
-                    creation_time = detection["metadata"]["passeringstid"]
-                except Exception:
-                    creation_time = ""
                 # update or create record in db
                 try:
                     photo = await PhotosAdapter().get_photo_by_g_base_url(
@@ -85,59 +133,34 @@ class SyncService:
                     i_u += 1
                 else:
                     # create new photo
-                    photo_info = {
-                        "confidence": 0,
-                        "name": Path(detection["url"]).name,
-                        "is_photo_finish": False,
-                        "is_start_registration": False,
-                        "starred": False,
-                        "event_id": event["id"],
-                        "creation_time": await format_time(token, event, creation_time),
-                        "ai_information": {},
-                        "information": detection["metadata"],
-                        "race_id": "",
-                        "raceclass": "",
-                        "biblist": [],
-                        "clublist": [],
-                        "g_crop_url": detection["crop_url"],
-                        "g_base_url": detection["url"],
-                    }
+                    photo_info = await self.create_new_photo_from_detection(
+                        token, event, detection
+                    )
+                    new_photos.append(photo_info)
 
-                    # analyze photo with Vision AI
-                    try:
-                        conf_limit = await ConfigAdapter().get_config(token, event["id"], "CONFIDENCE_LIMIT")
-                        photo_info["ai_information"] = AiImageService().analyze_photo_g_langrenn_v2(
-                            detection["url"], detection["crop_url"], conf_limit
-                        )
-                    except Exception as e:
-                        error_text = f"AiImageService - Error analysing photos {detection['url']}"
-                        logging.exception(error_text)
-                        raise Exception(error_text) from e
-
-                    # new photo - try to link with event activities
-                    if detection["metadata"]["passeringspunkt"] in [
-                        "Finish",
-                        "Mål",
-                    ]:
-                        photo_info["is_photo_finish"] = True
-                    if detection["metadata"]["passeringspunkt"] == "Start":
-                        photo_info["is_start_registration"] = True
-                    if photo_info["ai_information"]:
-                        result = await link_ai_info_to_photo(
+            if new_photos:
+                informasjon += f"Funnet {len(new_photos)} nye bilder. "
+                for photo in new_photos:
+                    if photo["ai_information"]:
+                        result = await link_ai_info_to_photo_by_bib(
                             token,
-                            photo_info,
+                            photo,
                             event,
                             raceclasses,
                         )
 
-                    photo_id = await PhotosAdapter().create_photo(
-                        token, photo_info
-                    )
-                    await ConfigAdapter().update_config(
-                        token, event["id"], "GOOGLE_LATEST_PHOTO", detection["url"]
-                    )
-                    logging.debug(f"Created photo with id {photo_id}")
-                    i_c += 1
+                        photo_id = await PhotosAdapter().create_photo(
+                            token, photo
+                        )
+                        logging.debug(f"Created photo with id {photo_id}")
+                        i_c += 1
+                        # move processed blob to archive
+                        GoogleCloudStorageAdapter().move_to_detect_archive(
+                            event["id"], Path(photo["g_base_url"]).name
+                        )
+                await ConfigAdapter().update_config(
+                    token, event["id"], "GOOGLE_LATEST_PHOTO", new_photos[0]["g_base_url"]
+                )
             informasjon = (
                 f"Synkronisert bilder fra Google Cloud Storage. {i_u} oppdatert og {i_c} opprettet."
             )
@@ -299,16 +322,20 @@ class SyncService:
             )
         return informasjon
 
-async def link_ai_info_to_photo(
+async def link_ai_info_to_photo_by_bib(
     token: str, photo_info: dict, event: dict, raceclasses: list
 ) -> int:
     """Link ai information to photo."""
-    # first check for bib on cropped image
+    # first check for bibs on cropped image, starting with most frequent
     result = HTTPStatus.NO_CONTENT
-    for nummer in photo_info["ai_information"]["ai_crop_numbers"]:
+    detected_numbers = photo_info["ai_information"]["ai_crop_numbers"]
+    counter = Counter(detected_numbers).most_common(3)
+    for nummer, _ in counter:
         result = await find_race_info_by_bib(
             token, nummer, photo_info, event, raceclasses, 100
         )
+        if result == HTTPStatus.OK:
+            break
     # use time only if by bib was not successful
     if result == HTTPStatus.NO_CONTENT:
         result = await find_race_info_by_time(token, photo_info, event, 50)

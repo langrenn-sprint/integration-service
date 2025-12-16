@@ -132,6 +132,18 @@ class GoogleCloudStorageAdapter:
             logging.exception("Error moving photo to archive.")
         return destination_file
 
+    def move_to_detect_archive(self, event_id: str, filename: str) -> str:
+        """Move photo to local archive."""
+        destination_file = ""
+        try:
+            self.move_blob(
+                f"{event_id}/DETECT/{filename}",
+                f"{event_id}/DETECT_ARCHIVE/{filename}",
+            )
+        except Exception:
+            logging.exception("Error moving photo to archive.")
+        return destination_file
+
     def list_detect_blobs(self, event_id: str) -> list[dict]:
         """List all detected blobs in the bucket."""
         servicename = "GoogleCloudStorageAdapter.list_detect_blobs"
@@ -150,11 +162,13 @@ class GoogleCloudStorageAdapter:
                 if blob.metadata:
                     metadata = blob.metadata
                     if metadata["image_type"] == "detection":
+                        crop_url = blob.public_url.replace(".jpg", "_crop.jpg")
+                        crop_url = crop_url.replace("/DETECT/", "/DETECT_CROP/")
                         detection = {
                             "name": blob.name,
                             "url": blob.public_url,
                             "crop_name": blob.name.replace(".jpg", "_crop.jpg"),
-                            "crop_url": blob.public_url.replace(".jpg", "_crop.jpg"),
+                            "crop_url": crop_url,
                             "metadata": metadata
                         }
                         detect_blobs.append(detection)
