@@ -29,6 +29,7 @@ logging.basicConfig(
 # Separate logging for errors
 file_handler = RotatingFileHandler("error.log", maxBytes=1024 * 1024, backupCount=5)
 file_handler.setLevel(logging.ERROR)
+
 # Create a formatter with the desired format
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 file_handler.setFormatter(formatter)
@@ -42,70 +43,78 @@ async def main() -> None:
     status_type = ""
     i = STATUS_INTERVAL
     try:
-        # login to data-source
-        token = await do_login()
-        event = await get_event(token)
-        information = (
-            f"integration-service is ready! - {event['name']}, {event['date_of_event']}"
-        )
-        status_type = await ConfigAdapter().get_config(
-            token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
-        )
-        await StatusAdapter().create_status(
-            token, event, status_type, information
-        )
+        try:
+            # login to data-source
+            token = await do_login()
+            event = await get_event(token)
+            information = (
+                f"integration-service is ready! - {event['name']}, {event['date_of_event']}"
+            )
+            status_type = await ConfigAdapter().get_config(
+                token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
+            )
+            await StatusAdapter().create_status(
+                token, event, status_type, information
+            )
 
-        # service ready!
-        await ConfigAdapter().update_config(
-            token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "True"
-        )
-        while True:
-            service_config = await get_service_status(token, event)
-            try:
-                if service_config["service_start"]:
-                    # run service
-                    await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
-                    if service_config["storage_mode"] in ["cloud_storage", "local_storage"]:
-                        await SyncService().process_captured_raw_videos(token, event, service_config["storage_mode"])
-                    elif service_config["storage_mode"] in ["pull_detections"]:
-                        await SyncService().pull_photos_from_pubsub(token, event)
+            # service ready!
+            await ConfigAdapter().update_config(
+                token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "True"
+            )
+            while True:
+                service_config = await get_service_status(token, event)
+                try:
+                    if service_config["service_start"]:
+                        # run service
+                        await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
+                        if service_config["storage_mode"] in ["cloud_storage", "local_storage"]:
+                            await SyncService().process_captured_raw_videos(token, event, service_config["storage_mode"])
+                        elif service_config["storage_mode"] in ["pull_detections"]:
+                            await SyncService().pull_photos_from_pubsub(token, event)
+                        else:
+                            raise_invalid_storage_mode(service_config["storage_mode"])
+                        await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
                     else:
-                        raise_invalid_storage_mode(service_config["storage_mode"])
-                    await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
-                else:
-                    # should be invalid (no muliti thread) - reset
+                        # should be invalid (no muliti thread) - reset
+                        await ConfigAdapter().update_config(
+                            token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
+                        )
+                except Exception as e:
+                    err_string = str(e)
+                    logging.exception(err_string)
+                    await StatusAdapter().create_status(
+                        token,
+                        event,
+                        status_type,
+                        f"Error in Integration Service. Stopping.: {err_string}",
+                    )
                     await ConfigAdapter().update_config(
                         token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
                     )
-            except Exception as e:
-                err_string = str(e)
-                logging.exception(err_string)
-                await StatusAdapter().create_status(
-                    token,
-                    event,
-                    status_type,
-                    f"Error in Integration Service. Stopping.: {err_string}",
-                )
-                await ConfigAdapter().update_config(
-                    token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
-                )
-                await ConfigAdapter().update_config(
-                    token, event["id"], "INTEGRATION_SERVICE_START", "False"
-                )
-            if i > STATUS_INTERVAL:
-                informasjon = f"Integration Service kjører i modus {service_config['storage_mode']}."
-                await StatusAdapter().create_status(
-                    token, event, status_type, informasjon
-                )
-                i = 0
-            else:
-                i += 1
-            await asyncio.sleep(2)
-    except Exception as e:
-        err_string = str(e)
-        logging.exception(err_string)
+                    await ConfigAdapter().update_config(
+                        token, event["id"], "INTEGRATION_SERVICE_START", "False"
+                    )
+                if i > STATUS_INTERVAL:
+                    informasjon = f"Integration Service kjører i modus {service_config['storage_mode']}."
+                    await StatusAdapter().create_status(
+                        token, event, status_type, informasjon
+                    )
+                    i = 0
+                else:
+                    i += 1
+                await asyncio.sleep(2)
+        except Exception as e:
+            err_string = str(e)
+            logging.exception(err_string)
+            await StatusAdapter().create_status(
+                token, event, status_type, f"Critical Error - exiting program: {err_string}"
+            )
+    except asyncio.CancelledError:
+        await ConfigAdapter().update_config(
+            token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
+        )
         await StatusAdapter().create_status(
-            token, event, status_type, f"Critical Error - exiting program: {err_string}"
+            token, event, status_type, "integration-service was cancelled (ctrl-c pressed)."
         )
     await ConfigAdapter().update_config(
         token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "False"
