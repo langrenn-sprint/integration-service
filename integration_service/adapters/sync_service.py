@@ -165,7 +165,7 @@ class SyncService:
             informasjon = (
                 f"Synkronisert bilder fra Google Cloud Storage. {i_u} oppdatert og {i_c} opprettet."
             )
-            await StatusAdapter().create_status(token, event, status_type, informasjon)
+            await StatusAdapter().create_status(token, event, status_type, informasjon, {})
         return informasjon
 
     async def push_new_photos_from_file(self, token: str, event: dict) -> str:
@@ -245,6 +245,7 @@ class SyncService:
                     event,
                     status_type,
                     error_text,
+                    {}
                 )
                 logging.exception(error_text)
         informasjon = f"Pushed {i_photo_count} photos to pubsub, errors: {i_error_count}"
@@ -254,6 +255,7 @@ class SyncService:
                 event,
                 status_type,
                 informasjon,
+                {}
             )
         return informasjon
 
@@ -306,6 +308,7 @@ class SyncService:
                         event,
                         status_type,
                         error_text,
+                        {}
                     )
                     logging.exception(error_text)
                     PhotosFileAdapter().move_to_error_archive(
@@ -320,6 +323,7 @@ class SyncService:
                 event,
                 status_type,
                 informasjon,
+                {}
             )
         return informasjon
 
