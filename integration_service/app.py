@@ -19,7 +19,7 @@ from integration_service.adapters import (
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 event = {"id": ""}
 status_type = ""
-STATUS_INTERVAL = 50
+STATUS_INTERVAL = 250
 
 # set up logging
 LOGGING_LEVEL = os.getenv("LOGGING_LEVEL", "INFO")
@@ -50,15 +50,13 @@ async def main() -> None:
     token = ""
     event = {}
     status_type = ""
-    i = STATUS_INTERVAL
+    i = 0
     try:
         try:
             # login to data-source
             token = await do_login()
             event = await get_event(token)
-            information = (
-                f"{instance_name} is ready! - {event['name']}"
-            )
+            information = (f"{instance_name} er klar.")
             status_type = await ConfigAdapter().get_config(
                 token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
             )
@@ -79,6 +77,22 @@ async def main() -> None:
                         else:
                             raise_invalid_storage_mode(service_config["storage_mode"])
                         await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
+                    if i > STATUS_INTERVAL:
+                        information = (f"{instance_name} er klar.")
+                        await StatusAdapter().create_status(
+                            token, event, status_type, information, event
+                        )
+                        i = 0
+                    else:
+                        i += 1
+                    # service ready!
+                    await ConfigAdapter().update_config(
+                        token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
+                    )
+                    await ConfigAdapter().update_config(
+                        token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "True"
+                    )
+                    await asyncio.sleep(5)
                 except Exception as e:
                     err_string = str(e)
                     logging.exception(err_string)
@@ -96,22 +110,6 @@ async def main() -> None:
                         await ConfigAdapter().update_config(
                             token, event["id"], "INTEGRATION_SERVICE_START", "False"
                         )
-                if i > STATUS_INTERVAL:
-                    informasjon = f"{instance_name} - is ready."
-                    await StatusAdapter().create_status(
-                        token, event, status_type, informasjon, {}
-                    )
-                    i = 0
-                else:
-                    i += 1
-                # service ready!
-                await ConfigAdapter().update_config(
-                    token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
-                )
-                await ConfigAdapter().update_config(
-                    token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "True"
-                )
-                await asyncio.sleep(5)
         except Exception as e:
             err_string = str(e)
             logging.exception(err_string)

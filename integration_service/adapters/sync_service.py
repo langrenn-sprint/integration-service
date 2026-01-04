@@ -162,101 +162,15 @@ class SyncService:
                 await ConfigAdapter().update_config(
                     token, event["id"], "GOOGLE_LATEST_PHOTO", new_photos[0]["g_base_url"]
                 )
-            informasjon = (
-                f"Synkronisert bilder fra Google Cloud Storage. {i_u} oppdatert og {i_c} opprettet."
-            )
-            await StatusAdapter().create_status(token, event, status_type, informasjon, {})
-        return informasjon
+            informasjon = "Synkronisert bilder fra Google Cloud Storage."
+            details = {
+                "service_name": "pull_photos_from_pubsub",
+                "created_photos": i_c,
+                "updated_photos": i_u,
+                "detect_list": detect_list,
+            }
 
-    async def push_new_photos_from_file(self, token: str, event: dict) -> str:
-        """Push photos to cloud storage, analyze and publish."""
-        i_photo_count = 0
-        i_error_count = 0
-        informasjon = ""
-        service_name = "push_new_photos_from_file"
-        status_type = await ConfigAdapter().get_config(
-            token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
-        )
-
-        # loop photos and group crops with main photo - only upload complete pairs
-        new_photos = PhotosFileAdapter().get_all_photos()
-        new_photos_grouped = group_photos(new_photos)
-        for x in new_photos_grouped:
-            group = {}
-            try:
-                group = new_photos_grouped[x]
-                if group["main"] and group["crop"]:
-                    # upload photo to cloud storage
-                    url_main = GoogleCloudStorageAdapter().upload_blob(
-                        event["id"], "photos", group["main"]
-                    )
-                    url_crop = GoogleCloudStorageAdapter().upload_blob(
-                        event["id"], "photos", group["crop"]
-                    )
-
-                    # analyze photo with Vision AI
-                    try:
-                        conf_limit = await ConfigAdapter().get_config(token, event["id"], "CONFIDENCE_LIMIT")
-                        ai_information = AiImageService().analyze_photo_g_langrenn_v2(
-                            url_main, url_crop, conf_limit
-                        )
-                    except Exception as e:
-                        error_text = f"AiImageService - Error analysing photos {url_main} and {url_crop} - {e}"
-                        logging.exception(error_text)
-                        raise Exception(error_text) from e
-
-                    pub_message = {
-                        "ai_information": ai_information,
-                        "crop_url": url_crop,
-                        "event_id": event["id"],
-                        "photo_info": get_image_description(group["main"]),
-                        "photo_url": url_main,
-                    }
-
-                    # publish info to pubsub
-                    try:
-                        result = GooglePubSubAdapter().publish_message(
-                            json.dumps(pub_message)
-                        )
-                    except Exception as e:
-                        error_text = f"GooglePubSub - error publishing message {pub_message} - {e}"
-                        raise Exception(error_text) from e
-
-                    # archive photos - ignore errors
-                    try:
-                        PhotosFileAdapter().move_photo_to_archive(
-                            Path(group["main"]).name
-                        )
-                        PhotosFileAdapter().move_photo_to_archive(
-                            Path(group["crop"]).name
-                        )
-                    except Exception:
-                        error_text = f"{service_name} - Error moving files {group} to archive."
-                        logging.exception(error_text)
-
-                    logging.debug(f"Published message {result} to pubsub.")
-                    i_photo_count += 1
-
-            except Exception as e:
-                error_text = f"{service_name} - {e}"
-                i_error_count += 1
-                await StatusAdapter().create_status(
-                    token,
-                    event,
-                    status_type,
-                    error_text,
-                    {}
-                )
-                logging.exception(error_text)
-        informasjon = f"Pushed {i_photo_count} photos to pubsub, errors: {i_error_count}"
-        if (i_error_count > 0) or (i_photo_count > 0):
-            await StatusAdapter().create_status(
-                token,
-                event,
-                status_type,
-                informasjon,
-                {}
-            )
+            await StatusAdapter().create_status(token, event, status_type, informasjon, details)
         return informasjon
 
 
@@ -266,6 +180,7 @@ class SyncService:
         i_raw_video_count = 0
         i_error_count = 0
         informasjon = ""
+        details = {}
         service_name = "push_captured_video"
         status_type = await ConfigAdapter().get_config(
             token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
@@ -276,11 +191,10 @@ class SyncService:
         for raw_video in raw_videos:
             PhotosFileAdapter().convert_raw_to_mp4(raw_video["url"])
             i_raw_video_count += 1
-        informasjon += f"Converted {i_raw_video_count} raw videos. "
 
         # loop videos and upload to cloud storage
+        url_video = ""
         if storage_mode == "cloud_storage":
-            url_video = ""
             new_videos = PhotosFileAdapter().get_all_capture_files(event["id"], "local_storage")
             for video in new_videos:
                 try:
@@ -301,29 +215,43 @@ class SyncService:
                     i_video_count += 1
 
                 except Exception as e:
-                    error_text = f"{service_name} - {e}"
+                    informasjon = "Error uploading captured video."
+                    details = {
+                        "video_name": video["name"],
+                        "video_url": video["url"],
+                        "service_name": service_name,
+                        "exception": str(e)
+                    }
                     i_error_count += 1
                     await StatusAdapter().create_status(
                         token,
                         event,
                         status_type,
-                        error_text,
-                        {}
+                        informasjon,
+                        details
                     )
-                    logging.exception(error_text)
+                    logging.exception(informasjon)
                     PhotosFileAdapter().move_to_error_archive(
                         event["id"],
                         "local_storage",
                         video["name"],
                     )
-            informasjon += f"Pushed {i_video_count} videos (<a href='{url_video}'>link</a>) to cloud bucket, errors: {i_error_count}"
+            informasjon = f"Pushed {i_video_count} videos."
+            details = {
+                "service_name": service_name,
+                "raw_videos": raw_videos,
+                "video_count": i_video_count,
+                "raw_video_count": i_raw_video_count,
+                "video_url": url_video,
+                "error_count": i_error_count
+            }
         if (i_error_count > 0) or (i_video_count > 0):
             await StatusAdapter().create_status(
                 token,
                 event,
                 status_type,
                 informasjon,
-                {}
+                details
             )
         return informasjon
 
