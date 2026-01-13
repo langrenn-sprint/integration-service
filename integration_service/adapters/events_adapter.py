@@ -232,3 +232,19 @@ class EventsAdapter:
                     reason=f"Error - {resp.status}: {body['detail']}."
                 )
         return str(result)
+
+    def add_hours_to_datetime(self, datetime_str: str, hours: int) -> str:
+        """Add hours to a datetime string.
+
+        Args:
+            datetime_str: Datetime string in format '20260110 08:46:49'
+            hours: Number of hours to add (can be negative)
+
+        Returns:
+            Datetime string in format '20260110 08:46:49'
+
+        """
+        dt = datetime.datetime.strptime(datetime_str, "%Y%m%d %H:%M:%S").replace(tzinfo=datetime.UTC)
+        dt = dt + datetime.timedelta(hours=hours)
+        return dt.strftime("%Y%m%d %H:%M:%S")
+

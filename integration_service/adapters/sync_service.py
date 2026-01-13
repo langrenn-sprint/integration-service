@@ -95,7 +95,7 @@ class SyncService:
         i_c = 0
         i_u = 0
 
-        detect_list = GoogleCloudStorageAdapter().list_detect_blobs(event["id"])
+        detect_list = GoogleCloudStorageAdapter().list_detect_blobs(event["id"], 10)
         if len(detect_list) == 0:
             informasjon = "Ingen bilder funnet."
         else:
@@ -162,7 +162,7 @@ class SyncService:
                 await ConfigAdapter().update_config(
                     token, event["id"], "GOOGLE_LATEST_PHOTO", new_photos[0]["g_base_url"]
                 )
-            informasjon = "Synkronisert bilder fra Google Cloud Storage."
+            informasjon = f"Synkronisert {i_c} bilder fra Google Cloud Storage."
             details = {
                 "service_name": "pull_photos_from_pubsub",
                 "created_photos": i_c,
@@ -297,7 +297,7 @@ async def find_race_info_by_bib(
                 foundheat = await verify_heat_time(
                     token,
                     event,
-                    photo_info["creation_time"],
+                    photo_info["information"]["passeringstid"],
                     raceduration,
                     start["race_id"],
                 )
@@ -345,7 +345,7 @@ async def find_race_info_by_time(
     }
     for race in all_races:
         seconds_diff = abs(
-            await get_seconds_diff(token, event, photo_info["creation_time"], race["start_time"])
+            await get_seconds_diff(token, event, photo_info["information"]["passeringstid"], race["start_time"])
             - raceduration
         )
 
