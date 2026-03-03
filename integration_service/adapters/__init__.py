@@ -12,6 +12,7 @@ from .photos_adapter import PhotosAdapter
 from .photos_file_adapter import PhotosFileAdapter
 from .raceclasses_adapter import RaceclassesAdapter
 from .raceplans_adapter import RaceplansAdapter
+from .service_instance_adapter import ServiceInstanceAdapter
 from .start_adapter import StartAdapter
 from .status_adapter import StatusAdapter
 from .sync_service import SyncService

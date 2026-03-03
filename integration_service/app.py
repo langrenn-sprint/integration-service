@@ -10,6 +10,7 @@ from logging.handlers import RotatingFileHandler
 from integration_service.adapters import (
     ConfigAdapter,
     EventsAdapter,
+    ServiceInstanceAdapter,
     StatusAdapter,
     SyncService,
     UserAdapter,
@@ -31,85 +32,137 @@ logging.basicConfig(
 # Separate logging for errors
 file_handler = RotatingFileHandler("error.log", maxBytes=1024 * 1024, backupCount=5)
 file_handler.setLevel(logging.ERROR)
-
 # Create a formatter with the desired format
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 file_handler.setFormatter(formatter)
 logging.getLogger().addHandler(file_handler)
 
 # Generate from hostname and PID
-instance_name = ""
+service_info = {
+    "mode": "",
+    "name": "",
+    "id": "",
+    "status_type": "",
+    "storage_mode": "",
+}
+
 if os.getenv("K_REVISION"):
-    instance_name = str(os.getenv("K_REVISION"))
+    service_info["name"] = str(os.getenv("K_REVISION"))
 else:
-    instance_name = f"{socket.gethostname()}"
+    service_info["name"] = f"{socket.gethostname()}"
+
+
+async def create_service_instance_dict(
+    event: dict,
+) -> dict:
+    """Create a service instance dictionary for the video service.
+
+    Args:
+        event: The event dictionary
+
+    Returns:
+        A dictionary representing the service instance
+
+    """
+    time_now = EventsAdapter().get_local_time(event, "log")
+    return {
+        "service_type": "INTEGRATION_SERVICE",
+        "instance_name": service_info["name"],
+        "status": "ready",
+        "host_name": socket.gethostname(),
+        "action": "",
+        "event_id": event["id"],
+        "started_at": time_now,
+        "last_heartbeat": time_now,
+        "metadata": {}
+    }
+
+
+async def run_the_service(token: str, event: dict, service_info: dict) -> None:
+    """Run one iteration of the integration service loop."""
+    try:
+        service_config = await get_config(token, service_info["id"])
+        if service_config["start"]:
+            await ServiceInstanceAdapter().update_service_instance_status(
+                token, event, service_info["id"], "running"
+            )
+            await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
+            if service_info["storage_mode"] in ["cloud_storage", "local_storage"]:
+                await SyncService().process_captured_raw_videos(token, event, service_info["storage_mode"])
+                await SyncService().process_captured_srt_videos(token, event)
+            elif service_info["storage_mode"] == "pull_detections":
+                await SyncService().pull_photos_from_pubsub(token, event)
+            else:
+                raise_invalid_storage_mode(service_info["storage_mode"])
+            await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
+        await ConfigAdapter().update_config(
+            token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
+        )
+        await ConfigAdapter().update_config(
+            token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "True"
+        )
+    except Exception as e:
+        err_string = str(e)
+        logging.exception(err_string)
+        # try new login if token expired
+        if str(HTTPStatus.UNAUTHORIZED.value) in err_string or str(
+            HTTPStatus.FORBIDDEN.value
+        ) in err_string:
+            token = await do_login()
+        else:
+            await StatusAdapter().create_status(
+                token,
+                event,
+                service_info["status_type"],
+                f"Error in {service_info['name']}. Stopping.",
+                {"error": err_string},
+            )
+            await ConfigAdapter().update_config(
+                token, event["id"], "INTEGRATION_SERVICE_START", "False"
+            )
 
 
 async def main() -> None:
     """CLI for analysing integration stream."""
     token = ""
     event = {}
-    status_type = ""
-    i = 0
+    i = STATUS_INTERVAL + 1
     try:
         try:
             # login to data-source
             token = await do_login()
             event = await get_event(token)
-            information = (f"{instance_name} er klar.")
-            status_type = await ConfigAdapter().get_config(
+
+            service_info["status_type"] = await ConfigAdapter().get_config(
                 token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
             )
-            await StatusAdapter().create_status(
-                token, event, status_type, information, event
+            service_instance = await create_service_instance_dict(event)
+            service_info["id"] = await ServiceInstanceAdapter().create_service_instance(token, service_instance)
+            service_info["storage_mode"] = await ConfigAdapter().get_config(
+                token, event["id"], "VIDEO_STORAGE_MODE"
             )
 
             while True:
                 try:
-                    service_config = await get_service_status(token, event)
-                    if service_config["service_start"]:
-                        # run service
-                        await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
-                        if service_config["storage_mode"] in ["cloud_storage", "local_storage"]:
-                            await SyncService().process_captured_raw_videos(token, event, service_config["storage_mode"])
-                        elif service_config["storage_mode"] in ["pull_detections"]:
-                            await SyncService().pull_photos_from_pubsub(token, event)
-                        else:
-                            raise_invalid_storage_mode(service_config["storage_mode"])
-                        await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
+                    await run_the_service(token, event, service_info)
                     if i > STATUS_INTERVAL:
-                        information = (f"{instance_name} er klar.")
-                        await StatusAdapter().create_status(
-                            token, event, status_type, information, event
-                        )
+                        await ServiceInstanceAdapter().send_heartbeat(token, event, service_info["id"])
                         i = 0
                     else:
                         i += 1
-                    # service ready!
-                    await ConfigAdapter().update_config(
-                        token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
-                    )
-                    await ConfigAdapter().update_config(
-                        token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "True"
-                    )
-                    await asyncio.sleep(5)
+                    await ServiceInstanceAdapter().update_service_instance_status(token, event, service_info["id"], "ready")
                 except Exception as e:
                     err_string = str(e)
                     logging.exception(err_string)
-                    # try new login if token expired (401 error)
-                    if str(HTTPStatus.UNAUTHORIZED.value) in err_string:
+                    # try new login if token expired
+                    if str(HTTPStatus.UNAUTHORIZED.value) in err_string or str(
+                        HTTPStatus.FORBIDDEN.value
+                    ) in err_string:
                         token = await do_login()
                     else:
-                        await StatusAdapter().create_status(
-                            token,
-                            event,
-                            status_type,
-                            f"Error in {instance_name}. Stopping.",
-                            {"error": err_string},
-                        )
-                        await ConfigAdapter().update_config(
-                            token, event["id"], "INTEGRATION_SERVICE_START", "False"
-                        )
+                        raise Exception(err_string) from e
+                await asyncio.sleep(5)
+
         except Exception as e:
             err_string = str(e)
             logging.exception(err_string)
@@ -121,11 +174,13 @@ async def main() -> None:
             token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
         )
         await StatusAdapter().create_status(
-            token, event, status_type, f"{instance_name} was cancelled (ctrl-c pressed).", {}
+            token, event, service_info["status_type"], f"{service_info['name']} was cancelled (ctrl-c pressed).", {}
         )
     await ConfigAdapter().update_config(
         token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "False"
     )
+    if service_info["id"]:
+        await ServiceInstanceAdapter().delete_service_instance(token, service_info["id"])
     logging.info("Goodbye!")
 
 
@@ -185,28 +240,19 @@ async def get_event(token: str) -> dict:
 
     return event
 
-
-async def get_service_status(token: str, event: dict) -> dict:
+async def get_config(token: str, instance_id: str) -> dict:
     """Get config details - use info from db."""
-    service_available = await ConfigAdapter().get_config_bool(
-        token, event["id"], "INTEGRATION_SERVICE_AVAILABLE"
-    )
-    service_running = await ConfigAdapter().get_config_bool(
-        token, event["id"], "INTEGRATION_SERVICE_RUNNING"
-    )
-    service_start = await ConfigAdapter().get_config_bool(
-        token, event["id"], "INTEGRATION_SERVICE_START"
-    )
-    storage_mode = await ConfigAdapter().get_config(
-        token, event["id"], "VIDEO_STORAGE_MODE"
-    )
-    return {
-        "service_available": service_available,
-        "service_running": service_running,
-        "service_start": service_start,
-        "storage_mode": storage_mode
+    instance_info = await ServiceInstanceAdapter().get_service_instance_by_id(token, instance_id)
+    instance_config = {
+        "start": False,
     }
 
+    if instance_info["action"] == "start":
+        instance_config["start"] = True
+    elif instance_info["action"] == "stop":
+        instance_config["start"] = False
+
+    return instance_config
 
 if __name__ == "__main__":
     asyncio.run(main())
