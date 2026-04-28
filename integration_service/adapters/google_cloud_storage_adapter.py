@@ -216,3 +216,27 @@ class GoogleCloudStorageAdapter:
         except Exception as e:
             logging.exception(servicename)
             raise Exception(servicename) from e
+
+    def download_blob(self, blob_path: str, destination_file: str) -> None:
+        """Download a blob from the bucket to local file.
+
+        Args:
+            blob_path: Path to the blob in the bucket (e.g. 'event_id/LIVESTREAM/file.ts')
+            destination_file: Local file path where blob will be downloaded
+
+        """
+        servicename = "GoogleCloudStorageAdapter.download_blob"
+
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(GOOGLE_STORAGE_BUCKET)
+            blob = bucket.blob(blob_path)
+            blob.download_to_filename(destination_file)
+            logging.debug(f"{servicename} downloaded {blob_path} to {destination_file}")
+        except NotFound as e:
+            informasjon = f"{servicename} Blob {blob_path} not found"
+            logging.exception(informasjon)
+            raise Exception(informasjon) from e
+        except Exception as e:
+            logging.exception(servicename)
+            raise Exception(servicename) from e

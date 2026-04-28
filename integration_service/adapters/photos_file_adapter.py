@@ -10,7 +10,8 @@ from integration_service.adapters.google_cloud_storage_adapter import (
 
 VISION_ROOT_PATH = f"{Path.cwd()}/integration_service/files"
 CAPTURED_FILE_PATH = f"{VISION_ROOT_PATH}/CAPTURE"
-CAPTURED_RAW_FILE_PATH = f"{VISION_ROOT_PATH}/RAW_CAPTURE"
+CAPTURED_RAW_FILE_PATH = f"{VISION_ROOT_PATH}/CAPTURE_RAW"
+CAPTURED_SRT_FILE_PATH = f"{VISION_ROOT_PATH}/CAPTURE_SRT"
 CAPTURED_ARCHIVE_PATH = f"{VISION_ROOT_PATH}/CAPTURE/archive"
 CAPTURED_ERROR_ARCHIVE_PATH = f"{VISION_ROOT_PATH}/CAPTURE/error_archive"
 PHOTOS_ARCHIVE_PATH = f"{VISION_ROOT_PATH}/archive"
@@ -32,6 +33,9 @@ class PhotosFileAdapter:
         my_folder = Path(CAPTURED_RAW_FILE_PATH)
         if not my_folder.exists():
             my_folder.mkdir(parents=True, exist_ok=True)
+        my_folder = Path(CAPTURED_SRT_FILE_PATH)
+        if not my_folder.exists():
+            my_folder.mkdir(parents=True, exist_ok=True)
 
     def get_capture_folder_path(self) -> str:
         """Get path to captured videos folder."""
@@ -40,6 +44,10 @@ class PhotosFileAdapter:
     def get_raw_capture_folder_path(self) -> str:
         """Get path to raw captured video folder."""
         return CAPTURED_RAW_FILE_PATH
+
+    def get_srt_capture_folder_path(self) -> str:
+        """Get path to SRT captured video folder."""
+        return CAPTURED_SRT_FILE_PATH
 
     def get_photos_archive_folder_path(self) -> str:
         """Get path to photo archive folder."""
@@ -67,6 +75,7 @@ class PhotosFileAdapter:
                 file_list = GoogleCloudStorageAdapter().list_blobs(event_id, "CAPTURE/")
             else:
                 # Local file system
+                Path(CAPTURED_FILE_PATH).mkdir(parents=True, exist_ok=True)
                 files = list(Path(CAPTURED_FILE_PATH).iterdir())
                 file_list = [
                     {"name": f.name, "url": f"{CAPTURED_FILE_PATH}/{f.name}"}
@@ -88,9 +97,32 @@ class PhotosFileAdapter:
                 file_list = GoogleCloudStorageAdapter().list_blobs(event_id, "RAW_CAPTURE/")
             else:
                 # Local file system
+                Path(CAPTURED_RAW_FILE_PATH).mkdir(parents=True, exist_ok=True)
                 files = list(Path(CAPTURED_RAW_FILE_PATH).iterdir())
                 file_list = [
                     {"name": f.name, "url": f"{CAPTURED_RAW_FILE_PATH}/{f.name}"}
+                    for f in files
+                    if f.is_file() and not f.name.startswith("TMP")
+                ]
+        except Exception:
+            informasjon = "Error getting captured files"
+            logging.exception(informasjon)
+            return []
+        else:
+            return file_list
+
+    def get_all_srt_files(self, event_id: str, storage_mode: str) ->  list[dict]:
+        """Get all url to all srt files on file directory."""
+        file_list = []
+        try:
+            if storage_mode == "cloud_storage":
+                file_list = GoogleCloudStorageAdapter().list_blobs(event_id, "CAPTURE_SRT/mux_stream/")
+            else:
+                # Local file system
+                Path(CAPTURED_SRT_FILE_PATH).mkdir(parents=True, exist_ok=True)
+                files = list(Path(CAPTURED_SRT_FILE_PATH).iterdir())
+                file_list = [
+                    {"name": f.name, "url": f"{CAPTURED_SRT_FILE_PATH}/{f.name}"}
                     for f in files
                     if f.is_file() and not f.name.startswith("TMP")
                 ]
@@ -219,3 +251,45 @@ class PhotosFileAdapter:
             logging.exception(informasjon)
             raise Exception(informasjon) from e
 
+    def convert_ts_file(
+        self,
+        ts_file: dict,
+    ) -> None:
+        """Convert .ts file into video clip using FFmpeg.
+
+        Args:
+            ts_file: Dictionary containing information about the .ts file to convert
+
+        Returns:
+            None
+
+        """
+        servicename = "PhotosFileAdapter.convert_ts_files"
+
+        try:
+
+            # Build ffmpeg command to merge and segment
+            command = [
+                "ffmpeg",
+                "-f", "concat",           # Use concat demuxer
+                "-safe", "0",             # Allow absolute paths
+                "-i", ts_file["path"],    # Input file
+                "-c", "copy",             # Copy streams without re-encoding (fast)
+                "-f", "segment",          # Segment output muxer
+                "-reset_timestamps", "1", # Reset timestamps for each segment
+                "-map", "0",              # Map all streams
+                str(ts_file["output"])
+            ]
+
+            logging.info(f"{servicename} Converting .ts file {ts_file['path']} into clips")
+            subprocess.run(command, check=True)  # noqa: S603
+
+            logging.info(f"{servicename} Created {ts_file['output']} video clip")
+        except subprocess.CalledProcessError as e:
+            informasjon = f"{servicename} FFmpeg merge failed"
+            logging.exception(informasjon)
+            raise Exception(informasjon) from e
+        except Exception as e:
+            informasjon = f"{servicename} Error merging .ts files"
+            logging.exception(informasjon)
+            raise Exception(informasjon) from e

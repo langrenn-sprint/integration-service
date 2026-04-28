@@ -3,6 +3,8 @@
 import datetime
 import json
 import logging
+import shutil
+import tempfile
 from collections import Counter
 from http import HTTPStatus
 from pathlib import Path
@@ -171,6 +173,87 @@ class SyncService:
             }
 
             await StatusAdapter().create_status(token, event, status_type, informasjon, details)
+        return informasjon
+
+
+    async def process_captured_srt_videos(self, token: str, event: dict) -> str:
+        """Process captured srt videos and push to cloud storage if needed."""
+        i_video_count = 0
+        i_raw_video_count = 0
+        i_error_count = 0
+        informasjon = ""
+        details = {}
+        service_name = "process_captured_srt_videos"
+        status_type = await ConfigAdapter().get_config(
+            token, event["id"], "INTEGRATION_SERVICE_STATUS_TYPE"
+        )
+
+        # loop raw videos and convert/repair
+        raw_videos = PhotosFileAdapter().get_all_srt_files(event["id"], "cloud_storage")
+        for raw_video in raw_videos:
+            PhotosFileAdapter().convert_raw_to_mp4(raw_video["url"])
+            i_raw_video_count += 1
+
+        # loop videos and upload to cloud storage
+        url_video = ""
+        new_videos = PhotosFileAdapter().get_all_srt_files(event["id"], "local_storage")
+        for video in new_videos:
+            try:
+                # upload video to cloud storage
+                url_video = GoogleCloudStorageAdapter().upload_blob(event["id"], "CAPTURE", video["url"])
+
+                # archive video - ignore errors
+                try:
+                    PhotosFileAdapter().move_to_capture_archive(
+                        event["id"],
+                        "local_storage",
+                        video["name"],
+                    )
+                except Exception:
+                    error_text = f"{service_name} - Error moving file {video["name"]} to local archive."
+                    logging.exception(error_text)
+
+                i_video_count += 1
+
+            except Exception as e:
+                informasjon = "Error uploading captured video."
+                details = {
+                    "video_name": video["name"],
+                    "video_url": video["url"],
+                    "service_name": service_name,
+                    "exception": str(e)
+                }
+                i_error_count += 1
+                await StatusAdapter().create_status(
+                    token,
+                    event,
+                    status_type,
+                    informasjon,
+                    details
+                )
+                logging.exception(informasjon)
+                PhotosFileAdapter().move_to_error_archive(
+                    event["id"],
+                    "local_storage",
+                    video["name"],
+                )
+        informasjon = f"Pushed {i_video_count} videos."
+        details = {
+            "service_name": service_name,
+            "raw_videos": raw_videos,
+            "video_count": i_video_count,
+            "raw_video_count": i_raw_video_count,
+            "video_url": url_video,
+            "error_count": i_error_count
+        }
+        if (i_error_count > 0) or (i_video_count > 0):
+            await StatusAdapter().create_status(
+                token,
+                event,
+                status_type,
+                informasjon,
+                details
+            )
         return informasjon
 
 

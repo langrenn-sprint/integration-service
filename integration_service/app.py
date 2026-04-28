@@ -86,7 +86,6 @@ async def run_the_service(token: str, event: dict, service_info: dict) -> None:
             await ServiceInstanceAdapter().update_service_instance_status(
                 token, event, service_info["id"], "running"
             )
-            await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "True")
             if service_info["storage_mode"] in ["cloud_storage", "local_storage"]:
                 await SyncService().process_captured_raw_videos(token, event, service_info["storage_mode"])
                 await SyncService().process_captured_srt_videos(token, event)
@@ -94,13 +93,6 @@ async def run_the_service(token: str, event: dict, service_info: dict) -> None:
                 await SyncService().pull_photos_from_pubsub(token, event)
             else:
                 raise_invalid_storage_mode(service_info["storage_mode"])
-            await ConfigAdapter().update_config(token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False")
-        await ConfigAdapter().update_config(
-            token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
-        )
-        await ConfigAdapter().update_config(
-            token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "True"
-        )
     except Exception as e:
         err_string = str(e)
         logging.exception(err_string)
@@ -116,9 +108,6 @@ async def run_the_service(token: str, event: dict, service_info: dict) -> None:
                 service_info["status_type"],
                 f"Error in {service_info['name']}. Stopping.",
                 {"error": err_string},
-            )
-            await ConfigAdapter().update_config(
-                token, event["id"], "INTEGRATION_SERVICE_START", "False"
             )
 
 
@@ -140,6 +129,9 @@ async def main() -> None:
             service_info["id"] = await ServiceInstanceAdapter().create_service_instance(token, service_instance)
             service_info["storage_mode"] = await ConfigAdapter().get_config(
                 token, event["id"], "VIDEO_STORAGE_MODE"
+            )
+            await StatusAdapter().create_status(
+                token, event, service_info["status_type"], f"{service_info['name']} is ready!", {}
             )
 
             while True:
@@ -170,15 +162,9 @@ async def main() -> None:
                 token, event, status_type, "Critical Error - exiting program", {"error": err_string}
             )
     except asyncio.CancelledError:
-        await ConfigAdapter().update_config(
-            token, event["id"], "INTEGRATION_SERVICE_RUNNING", "False"
-        )
         await StatusAdapter().create_status(
             token, event, service_info["status_type"], f"{service_info['name']} was cancelled (ctrl-c pressed).", {}
         )
-    await ConfigAdapter().update_config(
-        token, event["id"], "INTEGRATION_SERVICE_AVAILABLE", "False"
-    )
     if service_info["id"]:
         await ServiceInstanceAdapter().delete_service_instance(token, service_info["id"])
     logging.info("Goodbye!")
