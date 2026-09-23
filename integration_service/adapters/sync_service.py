@@ -190,13 +190,44 @@ class SyncService:
 
         # loop raw videos and convert/repair
         raw_videos = PhotosFileAdapter().get_all_srt_files(event["id"], "cloud_storage")
+        chunk_duration = await ConfigAdapter().get_config_int(
+            token, event["id"], "SRT_CHUNK_DURATION"
+        )
         for raw_video in raw_videos:
-            PhotosFileAdapter().convert_raw_to_mp4(raw_video["url"])
-            i_raw_video_count += 1
+            # mux-stream folder also contains the .ts segments referenced by the
+            # playlist - only the .m3u8 playlist itself should be converted.
+            if not raw_video["name"].endswith(".m3u8"):
+                continue
+            try:
+                if PhotosFileAdapter().is_live_stream_finished(raw_video["url"]):
+                    PhotosFileAdapter().convert_raw_to_mp4(raw_video["url"])
+                else:
+                    # stream still live - only pull a finished chunk, don't touch active segments
+                    PhotosFileAdapter().capture_live_segments(
+                        raw_video["url"], raw_video["name"], chunk_duration
+                    )
+                i_raw_video_count += 1
+            except Exception as e:
+                informasjon = "Error converting raw srt video."
+                details = {
+                    "video_name": raw_video["name"],
+                    "video_url": raw_video["url"],
+                    "service_name": service_name,
+                    "exception": str(e)
+                }
+                i_error_count += 1
+                await StatusAdapter().create_status(
+                    token,
+                    event,
+                    status_type,
+                    informasjon,
+                    details
+                )
+                logging.exception(informasjon)
 
         # loop videos and upload to cloud storage
         url_video = ""
-        new_videos = PhotosFileAdapter().get_all_srt_files(event["id"], "local_storage")
+        new_videos = PhotosFileAdapter().get_all_capture_files(event["id"], "local_storage")
         for video in new_videos:
             try:
                 # upload video to cloud storage
@@ -237,7 +268,7 @@ class SyncService:
                     "local_storage",
                     video["name"],
                 )
-        informasjon = f"Pushed {i_video_count} videos."
+        informasjon = f"Pushed {i_video_count} video(s)."
         details = {
             "service_name": service_name,
             "raw_videos": raw_videos,
@@ -358,7 +389,7 @@ async def link_ai_info_to_photo_by_bib(
     return result
 
 
-async def find_race_info_by_bib(
+async def find_race_info_by_bib(  # noqa: PLR0917
     token: str,
     bib: int,
     photo_info: dict,

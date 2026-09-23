@@ -4,5 +4,6 @@
     "INTEGRATION_SERVICE_STATUS_TYPE": "integration_status",
     "RACE_DURATION_ESTIMATE": 300,
     "RACE_TIME_DEVIATION_ALLOWED": 600,
+    "SRT_CHUNK_DURATION": 10,
     "VIDEO_STORAGE_MODE": "cloud_storage"
 }

@@ -46,7 +46,7 @@ class GoogleCloudStorageAdapter:
             f"{GOOGLE_STORAGE_SERVER}/{GOOGLE_STORAGE_BUCKET}/{destination_blob_name}"
         )
 
-    def upload_blob_bytes(
+    def upload_blob_bytes(  # noqa: PLR0917
             self,
             event_id: str,
             destination_folder: str,
@@ -240,3 +240,18 @@ class GoogleCloudStorageAdapter:
         except Exception as e:
             logging.exception(servicename)
             raise Exception(servicename) from e
+
+    def download_blob_as_text(self, blob_path: str) -> str:
+        """Download a blob's content as text, returning "" if it does not exist."""
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(GOOGLE_STORAGE_BUCKET)
+        try:
+            return bucket.blob(blob_path).download_as_text()
+        except NotFound:
+            return ""
+
+    def upload_text_blob(self, blob_path: str, text: str) -> None:
+        """Upload text content directly to a given blob path."""
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(GOOGLE_STORAGE_BUCKET)
+        bucket.blob(blob_path).upload_from_string(text, content_type="text/plain")

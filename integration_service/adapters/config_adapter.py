@@ -63,7 +63,7 @@ class ConfigAdapter:
                 informasjon = f"{servicename} failed - {resp.status} - {body['detail']}"
                 logging.error(informasjon)
                 raise web.HTTPBadRequest(reason=informasjon)
-        return config["value"].strip()
+        return config["value"]
 
     async def get_all_configs(self, token: str, event_id: str) -> list:
         """Get config by google id function."""
@@ -108,6 +108,7 @@ class ConfigAdapter:
     async def get_config_int(self, token: str, event_id: str, key: str) -> int:
         """Get config int value."""
         string_value = await self.get_config(token, event_id, key)
+        # check if the string value is a valid integer before converting
         return int(string_value)
 
     async def get_config_list(self, token: str, event_id: str, key: str) -> list:

@@ -7,11 +7,11 @@ Supporting both cloud and local storage mode (VIDEO_STORAGE_MODE - "cloud_storag
 curl https://pyenv.run | bash
 python -m venv .venv
 pyenv install 3.13
-source .venv/bin/activate
 ```
 
 ### Start service in virtual env:
 ```Zsh
+source .venv/bin/activate
 set -a
 source .env
 set +a
