@@ -136,6 +136,16 @@ class GoogleCloudStorageAdapter:
             logging.exception("Error moving photo to archive.")
         return destination_file
 
+    def move_to_srt_archive(self, event_id: str, blob_name: str) -> str:
+        """Move an SRT segment blob to the SRT archive, preserving its path."""
+        srt_prefix = f"{event_id}/CAPTURE_SRT/"
+        if not blob_name.startswith(srt_prefix):
+            raise ValueError
+        destination_blob_name = (
+            f"{event_id}/CAPTURE_SRT/archive/{blob_name.removeprefix(srt_prefix)}"
+        )
+        return self.move_blob(blob_name, destination_blob_name)
+
     def list_blobs(self, event_id: str, prefix: str) -> list[dict]:
         """List all blobs in the bucket that begin with the prefix."""
         servicename = "GoogleCloudStorageAdapter.list_blobs"

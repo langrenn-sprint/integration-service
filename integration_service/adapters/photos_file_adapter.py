@@ -274,17 +274,19 @@ class PhotosFileAdapter:
             ]
             subprocess.run(command, check=True)  # noqa: S603
 
-            # delete local (downloaded or original) input file and any segments
+            # Remove local copies; archive cloud segments only after conversion.
             input_path.unlink()
             for segment_path in segment_paths:
                 segment_path.unlink(missing_ok=True)
             logging.debug(f"Deleted raw video file: {input_path}")
 
-            # also delete the source blob(s) from cloud storage, if applicable
+            # Archive source segments only after FFmpeg successfully creates the MP4.
             if blob_name:
                 GoogleCloudStorageAdapter().delete_blob(blob_name)
                 for segment_blob_name in segment_blob_names:
-                    GoogleCloudStorageAdapter().delete_blob(segment_blob_name)
+                    GoogleCloudStorageAdapter().move_to_srt_archive(
+                        blob_name.split("/", 1)[0], segment_blob_name
+                    )
                 logging.debug(f"Deleted raw video blob: {blob_name}")
 
         except subprocess.CalledProcessError as e:
@@ -309,45 +311,94 @@ class PhotosFileAdapter:
     ) -> str | None:
         """Capture a fixed-duration mp4 chunk from a live HLS stream.
 
-        Only segments already present in the manifest are read, and only
-        segments already rolled out of the live window (below the playlist's
-        own #EXT-X-MEDIA-SEQUENCE) are ever deleted, so an active stream is
-        never disrupted. A watermark blob tracks the last segment already
-        included in a chunk, so repeated calls only pick up new segments.
+        Only segments present in the manifest are read. Source cloud segments
+        remain untouched while the stream is active. A watermark blob tracks
+        the last segment included in a chunk, so repeated calls pick up new
+        segments only.
 
         Returns the name of the produced mp4 chunk, or None if not enough
         new segments have accumulated yet to fill a chunk of chunk_duration.
         """
+        output_names = self._process_playlist_segments(
+            manifest_url, manifest_name, chunk_duration, flush_remainder=False
+        )
+        return output_names[0] if output_names else None
+
+    def capture_finished_segments(
+        self,
+        manifest_url: str,
+        manifest_name: str,
+        chunk_duration: int,
+    ) -> list[str]:
+        """Convert remaining finished-playlist segments into MP4 chunks."""
+        return self._process_playlist_segments(
+            manifest_url,
+            manifest_name,
+            chunk_duration,
+            flush_remainder=True,
+        )
+
+    def _process_playlist_segments(
+        self,
+        manifest_url: str,
+        manifest_name: str,
+        chunk_duration: int,
+        flush_remainder: bool,
+    ) -> list[str]:
+        """Build MP4 chunks from unprocessed playlist segments."""
         cloud_storage_prefix = f"{GOOGLE_STORAGE_SERVER}/{GOOGLE_STORAGE_BUCKET}/"
         if not manifest_url.startswith(cloud_storage_prefix):
-            err_msg = "capture_live_segments only supports cloud storage streams."
-            raise ValueError(err_msg)
+            raise ValueError
+        if chunk_duration <= 0:
+            raise ValueError
+
         manifest_blob_name = manifest_url.removeprefix(cloud_storage_prefix)
         blob_folder = manifest_blob_name.rsplit("/", 1)[0]
         manifest_stem = Path(manifest_name).stem
         watermark_blob_name = f"{blob_folder}/.watermark_{manifest_stem}"
-
         media_sequence, new_segments = self._get_new_live_segments(
             manifest_blob_name, watermark_blob_name
         )
-        chunk_segments, accumulated_duration = self._accumulate_chunk_segments(
-            new_segments, chunk_duration
+        all_segments = (
+            self._get_playlist_segments(manifest_blob_name, media_sequence)
+            if flush_remainder
+            else []
         )
-        if not chunk_segments or accumulated_duration < chunk_duration:
-            return None
+        output_names = []
+        storage = GoogleCloudStorageAdapter()
 
-        output_name, last_sequence = self._build_mp4_chunk(
-            blob_folder, manifest_stem, manifest_name, chunk_segments
-        )
+        while new_segments:
+            chunk_segments, accumulated_duration = self._accumulate_chunk_segments(
+                new_segments, chunk_duration
+            )
+            if accumulated_duration < chunk_duration:
+                if not flush_remainder:
+                    break
+                chunk_segments = new_segments
 
-        GoogleCloudStorageAdapter().upload_text_blob(watermark_blob_name, str(last_sequence))
+            output_name, last_sequence = self._build_mp4_chunk(
+                blob_folder, manifest_stem, manifest_name, chunk_segments
+            )
+            output_names.append(output_name)
+            storage.upload_text_blob(watermark_blob_name, str(last_sequence))
+            new_segments = [
+                segment for segment in new_segments if segment[0] > last_sequence
+            ]
 
-        # only segments already rolled out of the live window are safe to delete
-        for seq, segment_name, _, _ in chunk_segments:
-            if seq < media_sequence:
-                GoogleCloudStorageAdapter().delete_blob(f"{blob_folder}/{segment_name}")
+            if not flush_remainder:
+                break
 
-        return output_name
+        if flush_remainder:
+            event_id = manifest_blob_name.split("/", 1)[0]
+            for _, segment_name, _, _ in all_segments:
+                storage.move_to_srt_archive(
+                    event_id, f"{blob_folder}/{segment_name}"
+                )
+            storage.delete_blob(manifest_blob_name)
+            if storage.download_blob_as_text(watermark_blob_name):
+                storage.delete_blob(watermark_blob_name)
+
+        return output_names
 
     def _get_new_live_segments(
         self, manifest_blob_name: str, watermark_blob_name: str
@@ -360,7 +411,21 @@ class PhotosFileAdapter:
         watermark_text = GoogleCloudStorageAdapter().download_blob_as_text(watermark_blob_name)
         last_processed = int(watermark_text) if watermark_text else media_sequence - 1
 
-        # parse (sequence, segment_name, duration, program_date_time) for every segment in the playlist
+        segments = self._parse_playlist_segments(manifest_text, media_sequence)
+        new_segments = [segment for segment in segments if segment[0] > last_processed]
+        return media_sequence, new_segments
+
+    def _get_playlist_segments(
+        self, manifest_blob_name: str, media_sequence: int
+    ) -> list[tuple[int, str, float, str]]:
+        """Return every segment currently referenced by a playlist."""
+        manifest_text = GoogleCloudStorageAdapter().download_blob_as_text(manifest_blob_name)
+        return self._parse_playlist_segments(manifest_text, media_sequence)
+
+    def _parse_playlist_segments(
+        self, manifest_text: str, media_sequence: int
+    ) -> list[tuple[int, str, float, str]]:
+        """Parse sequence, name, duration, and program date-time per segment."""
         segments = []
         sequence = media_sequence
         duration = 0.0
@@ -374,9 +439,7 @@ class PhotosFileAdapter:
             elif line and not line.startswith("#"):
                 segments.append((sequence, line, duration, program_date_time))
                 sequence += 1
-
-        new_segments = [segment for segment in segments if segment[0] > last_processed]
-        return media_sequence, new_segments
+        return segments
 
     def _accumulate_chunk_segments(
         self, new_segments: list[tuple[int, str, float, str]], chunk_duration: int
@@ -400,10 +463,15 @@ class PhotosFileAdapter:
     ) -> tuple[str, int]:
         """Download chunk segments, concat them into an mp4, and clean up local files."""
         Path(CAPTURED_SRT_FILE_PATH).mkdir(parents=True, exist_ok=True)
+        Path(CAPTURED_FILE_PATH).mkdir(parents=True, exist_ok=True)
         concat_list_path = Path(CAPTURED_SRT_FILE_PATH) / f"TMP_concat_{manifest_stem}.txt"
         local_segment_paths = []
         last_sequence = chunk_segments[-1][0]
-        output_name = f"{manifest_stem}_{self._format_chunk_timestamp(chunk_segments[0][3])}.mp4"
+        first_sequence = chunk_segments[0][0]
+        output_name = (
+            f"{manifest_stem}_{self._format_chunk_timestamp(chunk_segments[0][3])}_"
+            f"{first_sequence}-{last_sequence}.mp4"
+        )
         try:
             with concat_list_path.open("w") as concat_list_file:
                 for _, segment_name, _, _ in chunk_segments:

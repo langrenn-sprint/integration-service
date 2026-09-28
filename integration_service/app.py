@@ -155,7 +155,6 @@ async def main() -> None:
                         token = await do_login()
                     else:
                         raise Exception(err_string) from e
-                logging.info("integration-service is waiting for an event to work on.")
                 await asyncio.sleep(5)
 
         except Exception as e:

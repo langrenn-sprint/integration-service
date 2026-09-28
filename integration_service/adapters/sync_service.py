@@ -177,7 +177,7 @@ class SyncService:
 
 
     async def process_captured_srt_videos(self, token: str, event: dict) -> str:
-        """Process captured srt videos and push to cloud storage if needed."""
+        """Process captured srt videos from cloud and push to cloud storage if needed."""
         i_video_count = 0
         i_raw_video_count = 0
         i_error_count = 0
@@ -191,7 +191,7 @@ class SyncService:
         # loop raw videos and convert/repair
         raw_videos = PhotosFileAdapter().get_all_srt_files(event["id"], "cloud_storage")
         chunk_duration = await ConfigAdapter().get_config_int(
-            token, event["id"], "SRT_CHUNK_DURATION"
+            token, event["id"], "VIDEO_CLIP_DURATION"
         )
         for raw_video in raw_videos:
             # mux-stream folder also contains the .ts segments referenced by the
@@ -200,7 +200,9 @@ class SyncService:
                 continue
             try:
                 if PhotosFileAdapter().is_live_stream_finished(raw_video["url"]):
-                    PhotosFileAdapter().convert_raw_to_mp4(raw_video["url"])
+                    PhotosFileAdapter().capture_finished_segments(
+                        raw_video["url"], raw_video["name"], chunk_duration
+                    )
                 else:
                     # stream still live - only pull a finished chunk, don't touch active segments
                     PhotosFileAdapter().capture_live_segments(
@@ -289,7 +291,7 @@ class SyncService:
 
 
     async def process_captured_raw_videos(self, token: str, event: dict, storage_mode: str) -> str:
-        """Process captured raw videos and push to cloud storage if needed."""
+        """Process captured local raw videos and push to cloud storage if needed."""
         i_video_count = 0
         i_raw_video_count = 0
         i_error_count = 0
