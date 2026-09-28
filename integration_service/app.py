@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import socket
+import uuid
 from http import HTTPStatus
 from logging.handlers import RotatingFileHandler
 
@@ -20,7 +21,7 @@ from integration_service.adapters import (
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 event = {"id": ""}
 status_type = ""
-STATUS_INTERVAL = 250
+STATUS_INTERVAL = 20
 
 # set up logging
 LOGGING_LEVEL = os.getenv("LOGGING_LEVEL", "INFO")
@@ -46,11 +47,12 @@ service_info = {
     "storage_mode": "",
 }
 
-if os.getenv("K_REVISION"):
-    service_info["name"] = str(os.getenv("K_REVISION"))
-else:
-    service_info["name"] = f"{socket.gethostname()}"
+instance_name = os.getenv("SERVICE_INSTANCE_NAME")
+if not instance_name:
+    host = os.getenv("HOSTNAME") or socket.gethostname()
+    instance_name = f"{host}-{uuid.uuid4().hex[:8]}"
 
+service_info["name"] = instance_name
 
 async def create_service_instance_dict(
     event: dict,
@@ -115,7 +117,7 @@ async def main() -> None:
     """CLI for analysing integration stream."""
     token = ""
     event = {}
-    i = STATUS_INTERVAL + 1
+    i = 0
     try:
         try:
             # login to data-source
@@ -153,6 +155,7 @@ async def main() -> None:
                         token = await do_login()
                     else:
                         raise Exception(err_string) from e
+                logging.info("integration-service is waiting for an event to work on.")
                 await asyncio.sleep(5)
 
         except Exception as e:

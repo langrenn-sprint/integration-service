@@ -171,7 +171,59 @@ class ServiceInstanceAdapter:
         for instance in service_instances:
             # Update the service instance
             instance["action"] = action
-            instance["last_updated"] = EventsAdapter().get_local_time(event, "log")
+            instance["last_heartbeat"] = EventsAdapter().get_local_time(event, "log")
+            informasjon = await self.update_service_instance(
+                token, instance["id"], instance,
+            )
+        return informasjon
+
+
+    async def update_instance_details(
+        self,
+        token: str,
+        event: dict,
+        instance_id: str,
+        new_trigger_line: str,
+        video_url: str,
+    ) -> str:
+        """Update service instance details function."""
+        service_instance = await self.get_service_instance_by_id(token, instance_id)
+        service_instance["metadata"]["trigger_line_xyxyn"] = new_trigger_line
+        service_instance["metadata"]["video_url"] = video_url
+        service_instance["last_heartbeat"] = EventsAdapter().get_local_time(
+            event, "log",
+        )
+        service_instance["action"] = "trigger_line_photo"
+
+        return await self.update_service_instance(
+            token, instance_id, service_instance,
+        )
+
+
+    async def update_service_instance_photo(
+        self,
+        token: str,
+        event: dict,
+        instance_id: str,
+        photo_url: str | None = None,
+        trigger_line_photo_url: str | None = None,
+    ) -> str:
+        """Update service instance photo function."""
+        informasjon = ""
+        service_instances = []
+
+        if instance_id:
+            service_instances.append(
+                await self.get_service_instance_by_id(token, instance_id),
+            )
+        for instance in service_instances:
+            # Update the service instance
+            if photo_url:
+                instance["metadata"]["latest_photo_url"] = photo_url
+            if trigger_line_photo_url:
+                instance["metadata"]["trigger_line_photo_url"] = trigger_line_photo_url
+                instance["action"] = ""
+            instance["last_heartbeat"] = EventsAdapter().get_local_time(event, "log")
             informasjon = await self.update_service_instance(
                 token, instance["id"], instance,
             )
@@ -196,7 +248,7 @@ class ServiceInstanceAdapter:
         for instance in service_instances:
             # Update the service instance
             instance["status"] = status
-            instance["last_updated"] = EventsAdapter().get_local_time(event, "log")
+            instance["last_heartbeat"] = EventsAdapter().get_local_time(event, "log")
             informasjon = await self.update_service_instance(
                 token, instance["id"], instance,
             )
