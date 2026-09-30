@@ -120,7 +120,7 @@ class PhotosFileAdapter:
         file_list = []
         try:
             if storage_mode == "cloud_storage":
-                file_list = GoogleCloudStorageAdapter().list_blobs(event_id, "CAPTURE_SRT/mux-stream/")
+                file_list = GoogleCloudStorageAdapter().list_blobs(event_id, "CAPTURE_SRT/")
             else:
                 # Local file system
                 Path(CAPTURED_SRT_FILE_PATH).mkdir(parents=True, exist_ok=True)
@@ -462,20 +462,26 @@ class PhotosFileAdapter:
         chunk_segments: list[tuple[int, str, float, str]],
     ) -> tuple[str, int]:
         """Download chunk segments, concat them into an mp4, and clean up local files."""
-        Path(CAPTURED_SRT_FILE_PATH).mkdir(parents=True, exist_ok=True)
+        stream_name = self._get_stream_name(blob_folder)
+        local_srt_folder = Path(CAPTURED_SRT_FILE_PATH)
+        if stream_name:
+            local_srt_folder /= stream_name
+        local_srt_folder.mkdir(parents=True, exist_ok=True)
         Path(CAPTURED_FILE_PATH).mkdir(parents=True, exist_ok=True)
-        concat_list_path = Path(CAPTURED_SRT_FILE_PATH) / f"TMP_concat_{manifest_stem}.txt"
+        concat_list_path = local_srt_folder / f"TMP_concat_{manifest_stem}.txt"
         local_segment_paths = []
         last_sequence = chunk_segments[-1][0]
         first_sequence = chunk_segments[0][0]
+        output_stem = f"{stream_name}_{manifest_stem}" if stream_name else manifest_stem
         output_name = (
-            f"{manifest_stem}_{self._format_chunk_timestamp(chunk_segments[0][3])}_"
+            f"{output_stem}_{self._format_chunk_timestamp(chunk_segments[0][3])}_"
             f"{first_sequence}-{last_sequence}.mp4"
         )
         try:
             with concat_list_path.open("w") as concat_list_file:
                 for _, segment_name, _, _ in chunk_segments:
-                    segment_path = Path(CAPTURED_SRT_FILE_PATH) / segment_name
+                    segment_path = local_srt_folder / segment_name
+                    segment_path.parent.mkdir(parents=True, exist_ok=True)
                     GoogleCloudStorageAdapter().download_blob(
                         f"{blob_folder}/{segment_name}", str(segment_path)
                     )
@@ -502,6 +508,18 @@ class PhotosFileAdapter:
                 segment_path.unlink(missing_ok=True)
 
         return output_name, last_sequence
+
+    def _get_stream_name(self, blob_folder: str) -> str:
+        """Return the stream directory following CAPTURE_SRT, if present."""
+        folder_parts = Path(blob_folder).parts
+        try:
+            srt_index = folder_parts.index("CAPTURE_SRT")
+        except ValueError:
+            return ""
+        if srt_index + 1 >= len(folder_parts):
+            return ""
+        stream_name = folder_parts[srt_index + 1]
+        return "" if stream_name == "mux-stream" else stream_name
 
     def _format_chunk_timestamp(self, program_date_time: str) -> str:
         """Convert an #EXT-X-PROGRAM-DATE-TIME value into a filename-safe timestamp."""

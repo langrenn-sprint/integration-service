@@ -169,3 +169,48 @@ def test_build_mp4_chunk_names_without_timestamp_are_unique(tmp_path: Path) -> N
         ]
 
     assert names == ["playlist_unknown_30-31.mp4", "playlist_unknown_32-33.mp4"]
+
+
+def test_build_mp4_chunk_names_and_temp_files_include_stream(tmp_path: Path) -> None:
+    """Keep same-named playlists and segments isolated between streams."""
+    adapter = photos_file_adapter.PhotosFileAdapter()
+    storage = Mock()
+
+    def download_blob(_blob_name: str, destination: str) -> None:
+        destination_path = Path(destination)
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        destination_path.write_text("segment data")
+
+    storage.download_blob.side_effect = download_blob
+    chunk = [(30, "segment-30.ts", 5.0, "")]
+
+    with (
+        patch.object(photos_file_adapter, "CAPTURED_SRT_FILE_PATH", str(tmp_path / "srt")),
+        patch.object(photos_file_adapter, "CAPTURED_FILE_PATH", str(tmp_path / "capture")),
+        patch.object(photos_file_adapter, "GoogleCloudStorageAdapter", return_value=storage),
+        patch.object(photos_file_adapter.subprocess, "run") as run_ffmpeg,
+    ):
+        names = [
+            adapter._build_mp4_chunk(  # noqa: SLF001
+                f"event/CAPTURE_SRT/{stream}/mux-stream",
+                "playlist",
+                "playlist.m3u8",
+                chunk,
+            )[0]
+            for stream in ("tir1", "tir2")
+        ]
+
+    assert names == [
+        "tir1_playlist_unknown_30-30.mp4",
+        "tir2_playlist_unknown_30-30.mp4",
+    ]
+    downloaded_paths = [Path(call.args[1]) for call in storage.download_blob.call_args_list]
+    assert downloaded_paths == [
+        tmp_path / "srt/tir1/segment-30.ts",
+        tmp_path / "srt/tir2/segment-30.ts",
+    ]
+    output_paths = [Path(call.args[0][-1]) for call in run_ffmpeg.call_args_list]
+    assert output_paths == [
+        tmp_path / "capture/tir1_playlist_unknown_30-30.mp4",
+        tmp_path / "capture/tir2_playlist_unknown_30-30.mp4",
+    ]
